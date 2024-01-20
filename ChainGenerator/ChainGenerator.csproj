@@ -10,7 +10,8 @@
   
   
   <ItemGroup>
-	<PackageReference Include="MudBlazor" Version="6.*"/>
+	<PackageReference Include="Betalgo.OpenAI.Utilities" Version="7.0.4" />
+	<PackageReference Include="MudBlazor" Version="6.*" />
     <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="8.0.0-rc.2.23480.2" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.0-rc.2.23480.2" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.0-rc.2.23480.1" />

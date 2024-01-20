@@ -1,0 +1,59 @@
+﻿@page "/chattest"
+
+@using System.Text
+@inject ChatSession ChatSession
+
+<h3>ChatTest</h3>
+
+<br />
+<br />
+
+<MudPaper Elevation="3" Style="height: 800px; overflow-y: scroll;">
+    @foreach (var message in _messages)
+    {
+        <MudCard Square="true" Elevation="0">
+            <MudCardHeader>
+                <CardHeaderAvatar>
+                    <MudAvatar Color="Color.Secondary">@message.Name.First()</MudAvatar>
+                </CardHeaderAvatar>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.body1">@message.Name</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudText Typo="Typo.body2">@message.Content</MudText>
+            </MudCardContent>
+        </MudCard>
+    }
+</MudPaper>
+<br />
+
+<MudTextField @bind-Value="userPrompt" Label="User Prompt" HelperText="" Variant="Variant.Outlined" />
+<br />
+<MudButton  
+    ButtonType="ButtonType.Submit" 
+    Variant="Variant.Filled" 
+    Color="Color.Primary" 
+    OnClick="@(() => Submit())"
+    Class="ml-auto">
+    Submit
+</MudButton>
+
+@code {
+    private List<ChatMessage> _messages = new List<ChatMessage>();
+    private string userPrompt { get; set; } = "";
+
+    private async Task Submit()
+    {
+        var sb = new StringBuilder();
+        _messages.Add(new ChatMessage { Name = "User", Role = "User", Content = userPrompt });
+        _messages.Add(new ChatMessage { Name = "Chat Bot", Role = "Bot", Content = "" });
+        await foreach (var responseSegment in ChatSession.GetResponseStream(userPrompt))
+        {
+            sb.Append(responseSegment);
+            _messages.Last().Content = sb.ToString();
+            StateHasChanged();
+            await Task.Yield(); // Yield control back to the framework for immediate re-rendering
+        }
+    }
+}
