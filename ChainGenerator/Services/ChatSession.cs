@@ -10,12 +10,13 @@ namespace ChainGenerator.Services
     public class ChatSession
     {
         private readonly IOpenAIService openAIService;
+        private readonly string defaultModel;
         private List<ChatMessage> messages = new List<ChatMessage>();
 
         public ChatSession(IOpenAIService openAIService)
         {
             this.openAIService = openAIService;
-            openAIService.SetDefaultModelId(Models.Gpt_3_5_Turbo_1106);
+            this.defaultModel = Models.Gpt_3_5_Turbo_1106;
         }
 
         public void SetSystemPrompt(string prompt)
@@ -45,18 +46,9 @@ namespace ChainGenerator.Services
 				throw new Exception("Recursive count exceeded.");
 			}
 
-			var request = new ChatCompletionCreateRequest
-			{
-				Messages = messages
-			};
+            ChatCompletionCreateRequest request = ProcessRequest(userPrompt, model);
 
-			if (model != null)
-			{
-				request.Model = model;
-			}
-
-			var response = openAIService.ChatCompletion.CreateCompletionAsStream(request);
-			AddMessage(ChatMessage.FromUser(userPrompt));
+            var response = openAIService.ChatCompletion.CreateCompletionAsStream(request);
 
 			var completeResponse = new StringBuilder();
 			await foreach (var completion in response)
@@ -75,7 +67,7 @@ namespace ChainGenerator.Services
                         yield break;
 					case "length":
 						// recursively call this function to stream results
-						await foreach (var recursiveResponse in InternalGetReponseStream(userPrompt, model, recursiveCount++))
+						await foreach (var recursiveResponse in InternalGetReponseStream(completeResponse.ToString(), model, recursiveCount++))
 						{
 							yield return recursiveResponse;
 						}
@@ -99,15 +91,7 @@ namespace ChainGenerator.Services
 
         public async Task<string> GetResponse(string userPrompt, string? model = null)
         {
-            var request = new ChatCompletionCreateRequest
-            {
-                Messages = messages
-            };
-
-            if (model != null)
-            {
-                request.Model = model;
-            }
+            ChatCompletionCreateRequest request = ProcessRequest(userPrompt, model);
 
             var response = await openAIService.ChatCompletion.CreateCompletion(request);
 
@@ -124,10 +108,26 @@ namespace ChainGenerator.Services
                 throw new Exception("Response message was null.");
             }
 
-            AddMessage(ChatMessage.FromUser(userPrompt));
             AddMessage(responseMessage);
 
             return responseText;
+        }
+
+        private ChatCompletionCreateRequest ProcessRequest(string userPrompt, string? model)
+        {
+            AddMessage(ChatMessage.FromUser(userPrompt));
+            var request = new ChatCompletionCreateRequest
+            {
+                Messages = messages,
+                Model = defaultModel
+            };
+
+            if (model != null)
+            {
+                request.Model = model;
+            }
+
+            return request;
         }
 
         private void AddMessage(ChatMessage message)

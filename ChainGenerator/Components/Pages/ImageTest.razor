@@ -1,0 +1,94 @@
+﻿@page "/imagetest"
+
+@using System.Text
+@using OpenAI.ObjectModels.ResponseModels.ImageResponseModel
+@inject ImageGenerator ImageGenerator
+
+<h3>Image Test</h3>
+
+<br />
+<br />
+
+<MudPaper Elevation="3" Style="height: 800px; overflow-y: scroll;">
+    <MudGrid Spacing="2" Justify="Justify.Center">
+        @foreach (var message in _messages)
+        {
+            @foreach (var result in message.Results)
+            {
+                <MudItem>
+                    <MudCard Square="true" Elevation="1">
+                        <MudImage 
+                            ObjectFit="ObjectFit.Contain" 
+                            Src="@result.Url"
+                            Height="200" 
+                            Width="200" />
+                        <MudCardContent>
+                            <MudText Typo="Typo.h5">Revised Prompt</MudText>
+                            <MudText Typo="Typo.body2">@result.RevisedPrompt</MudText>
+                            <MudText Typo="Typo.body2">@result.Url</MudText>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            }
+        }
+    </MudGrid>
+</MudPaper>
+<br />
+
+<MudSlider @bind-Value="@imagesToGenerate" Min="1" Max="10">Images To Generate: @imagesToGenerate</MudSlider>
+<MudTextField @bind-Value="userPrompt" @onkeydown="@OnKeyDown" Label="User Prompt" HelperText="" Variant="Variant.Outlined" />
+<br />
+<MudButton ButtonType="ButtonType.Submit"
+           Disabled="@processing"
+           Variant="Variant.Filled"
+           Color="Color.Primary"
+           OnClick="@(() => Submit())"
+           Class="ml-auto">
+        @if (processing)
+    {
+        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+        <MudText Class="ms-2">Processing</MudText>
+    }
+    else
+    {
+        <MudText>Generate Image</MudText>
+    }
+</MudButton>
+
+@code {
+    private List<ImageCreateResponse> _messages = new List<ImageCreateResponse>();
+    private string userPrompt { get; set; } = "";
+    private int imagesToGenerate { get; set; } = 1;
+    private bool processing { get; set; } = false;
+
+    private async Task Submit()
+    {
+        // make parallel requests to the API for each image
+        processing = true;
+        var tasks = new List<Task>();
+        for (int i = 0; i < imagesToGenerate; i++)
+        {
+            tasks.Add(GenerateImage());
+        }
+        await Task.WhenAll(tasks);
+        StateHasChanged();
+        processing = false;
+    }
+
+    private async Task GenerateImage()
+    {
+        var response = await ImageGenerator.CreateImageWithPromptRevisionAsync(new ImageCreateRequest
+            {
+                Prompt = userPrompt
+            });
+        _messages.Add(response);
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Code == "Enter" || e.Code == "NumpadEnter")
+        {
+            await Submit();
+        }
+    }
+}

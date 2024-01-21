@@ -17,6 +17,7 @@ builder.Services.AddRazorComponents()
 builder.Services.AddMudServices();
 builder.Services.AddOpenAIService();
 builder.Services.AddTransient<ChatSession>();
+builder.Services.AddTransient<ImageGenerator>();
 
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<IdentityUserAccessor>();

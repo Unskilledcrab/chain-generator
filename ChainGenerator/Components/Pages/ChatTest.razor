@@ -3,12 +3,13 @@
 @using System.Text
 @inject ChatSession ChatSession
 
-<h3>ChatTest</h3>
+<h3>Chat Test</h3>
 
 <br />
 <br />
 
 <MudPaper Elevation="3" Style="height: 800px; overflow-y: scroll;">
+    <div id="top_chat" />
     @foreach (var message in _messages)
     {
         <MudCard Square="true" Elevation="0">
@@ -21,14 +22,21 @@
                 </CardHeaderContent>
             </MudCardHeader>
             <MudCardContent>
-                <MudText Typo="Typo.body2">@message.Content</MudText>
+                @((MarkupString)message.Content.Replace("\n","<br>"))
             </MudCardContent>
         </MudCard>
     }
+    <MudScrollToTop TopOffset="100"
+                    Selector="#top_chat"
+                    VisibleCssClass="visible absolute"
+                    HiddenCssClass="invisible">
+        <MudButton Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.ArrowUpward">Go to top</MudButton>
+    </MudScrollToTop>
+    <div id="bottom_chat" />
 </MudPaper>
 <br />
 
-<MudTextField @bind-Value="userPrompt" Label="User Prompt" HelperText="" Variant="Variant.Outlined" />
+<MudTextField @bind-Value="userPrompt" @onkeydown="@OnKeyDown" Immediate="true" Label="User Prompt" HelperText="" Variant="Variant.Outlined" />
 <br />
 <MudButton  
     ButtonType="ButtonType.Submit" 
@@ -42,6 +50,14 @@
 @code {
     private List<ChatMessage> _messages = new List<ChatMessage>();
     private string userPrompt { get; set; } = "";
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Code == "Enter" || e.Code == "NumpadEnter")
+        {
+            await Submit();
+        }
+    }
 
     private async Task Submit()
     {
