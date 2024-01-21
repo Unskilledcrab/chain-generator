@@ -1,0 +1,89 @@
+﻿@using System.Text
+@inject IServiceProvider ServiceProvider
+
+<MudCard Outlined="true">
+    <MudCardHeader>
+        <CardHeaderContent>
+            <MudText Typo="Typo.h6">@WidgetTextGenerator.Title</MudText>
+        </CardHeaderContent>
+        <CardHeaderActions>
+                <MudIconButton OnClick="OnRefreshAsync" Icon="@Icons.Material.Filled.Refresh" Color="Color.Default" />
+            <MudIconButton Icon="@Icons.Material.Filled.Settings" Color="Color.Default" />
+        </CardHeaderActions>
+    </MudCardHeader>
+    <MudCardContent>
+        <MudTextField 
+            T="string" 
+            @bind-Text="@WidgetTextGenerator.Prompt" 
+            Label="Insert Prompt Here" 
+            Immediate="true"
+            DebounceInterval="200"
+            OnDebounceIntervalElapsed="OnPromptChanged"
+            HelperText="@promptHelpText"
+            AutoGrow />
+        <MudTextField 
+            T="string" 
+            Disabled="true" 
+            Placeholder="@placeHolderText"
+            Text="@WidgetTextGenerator.GeneratedOutput" 
+            AutoGrow />
+    </MudCardContent>
+</MudCard>
+
+ @code {
+    [Parameter]
+    public WidgetTextTest Parent { get; set; }
+
+    [EditorRequired]
+    [Parameter]
+    public WidgetTextGenerator WidgetTextGenerator { get; set; }
+
+    [Parameter]
+    public EventCallback<WidgetText> OnRefresh { get; set; }
+
+    private string promptHelpText { get; set; }
+
+    private async Task OnRefreshAsync()
+    {
+        await OnRefresh.InvokeAsync(this);
+    }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Parent?.AddWidgetText(this);
+    }
+
+    public void OnPromptChanged(string newPrompt)
+    {
+        promptHelpText = string.Empty;
+        if (WidgetTextGenerator.ContainsGeneratorReferences())
+        {
+            promptHelpText = $"Referencing the following widgets: {string.Join(", ", WidgetTextGenerator.GetGeneratorReferences())}";
+        }
+    }
+
+    private string placeHolderText => WidgetTextGenerator.ContainsGeneratorReferences() ?
+        $"Generating as soon as the following widgets have been generated: {string.Join(", ", WidgetTextGenerator.GetGeneratorReferences())}" :
+        "Click the refresh button to generate text";
+
+    public async Task Refresh()
+    {
+        using (var scope = ServiceProvider.CreateScope())
+        {
+            var chatSession = scope.ServiceProvider.GetRequiredService<ChatSession>();
+            var sb = new StringBuilder();
+            WidgetTextGenerator.GeneratedOutput = string.Empty;
+
+            await foreach (var responseSegment in chatSession.GetResponseStream(WidgetTextGenerator.GetFinalPrompt()))
+            {
+                sb.Append(responseSegment);
+                WidgetTextGenerator.GeneratedOutput = sb.ToString();
+                StateHasChanged();
+                await Task.Yield();
+            }
+
+            WidgetTextGenerator.GeneratedOutput = WidgetTextGenerator.GeneratedOutput.Trim();
+        }
+    }
+}

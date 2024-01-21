@@ -15,7 +15,7 @@ namespace ChainGenerator.Services
         {
             this.openAIService = openAIService;
             this.serviceProvider = serviceProvider;
-            this.defaultModel = Models.Dall_e_3;
+            this.defaultModel = OpenAI.ObjectModels.Models.Dall_e_3;
         }
 
         public async Task<ImageCreateResponse> CreateImageAsync(ImageCreateRequest request)

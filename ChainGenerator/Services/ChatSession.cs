@@ -16,7 +16,7 @@ namespace ChainGenerator.Services
         public ChatSession(IOpenAIService openAIService)
         {
             this.openAIService = openAIService;
-            this.defaultModel = Models.Gpt_3_5_Turbo_1106;
+            this.defaultModel = OpenAI.ObjectModels.Models.Gpt_3_5_Turbo_1106;
         }
 
         public void SetSystemPrompt(string prompt)

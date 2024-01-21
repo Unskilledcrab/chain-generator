@@ -1,0 +1,98 @@
+﻿@page "/widgettexttest"
+
+@foreach (var generator in generators)
+{
+    <WidgetText WidgetTextGenerator="@generator" OnRefresh="OnGeneratorRefresh" Parent="@this" />
+}
+
+
+<MudTextField @bind-Value="userPrompt" @onkeydown="@OnKeyDown" Immediate="true" Label="User Prompt" HelperText="" Variant="Variant.Outlined" />
+<br />
+<MudButton ButtonType="ButtonType.Submit"
+           Variant="Variant.Filled"
+           Color="Color.Primary"
+           OnClick="@(() => Submit())"
+           Class="ml-auto">
+    Submit
+</MudButton>
+
+@code {
+    private List<WidgetText> widgetTexts = new List<WidgetText>();
+    private List<WidgetTextGenerator> generators = new List<WidgetTextGenerator>
+    {
+        new WidgetTextGenerator
+        {
+            Title = "Test Title 1",
+        },
+        new WidgetTextGenerator
+        {
+            Title = "Test Title 2",
+        },
+        new WidgetTextGenerator
+        {
+            Title = "Test Title 3",
+        },
+    };
+
+
+    private string userPrompt { get; set; } = "";
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Code == "Enter" || e.Code == "NumpadEnter")
+        {
+            await Submit();
+        }
+    }
+
+    private async Task Submit()
+    {
+        generators.Add(new WidgetTextGenerator
+        {
+            Title = userPrompt,
+        });
+    }
+
+    public void AddWidgetText(WidgetText widgetText)
+    {
+        widgetTexts.Add(widgetText);
+    }
+
+    private async Task OnGeneratorRefresh(WidgetText refreshTargetWidgetText)
+    {
+        await InternalOnGeneratorRefresh(refreshTargetWidgetText);
+    }
+
+    private async Task InternalOnGeneratorRefresh(WidgetText refreshTargetWidgetText, List<WidgetText>? alreadyRefershedWidgets = null)
+    {
+        alreadyRefershedWidgets ??= new List<WidgetText>();
+        if (alreadyRefershedWidgets.Contains(refreshTargetWidgetText))
+        {
+            return;
+        }
+        alreadyRefershedWidgets.Add(refreshTargetWidgetText);
+
+        refreshTargetWidgetText.WidgetTextGenerator.GeneratedPrompt = refreshTargetWidgetText.WidgetTextGenerator.Prompt;
+        foreach (var referencedWidget in refreshTargetWidgetText.WidgetTextGenerator.GetGeneratorReferences())
+        {
+            foreach (var generator in generators)
+            {
+                if (generator.Title == referencedWidget)
+                {
+                    refreshTargetWidgetText.WidgetTextGenerator.GeneratedPrompt = refreshTargetWidgetText.WidgetTextGenerator.GeneratedPrompt.Replace("{{" + referencedWidget + "}}", generator.GetFinalOutput());
+                }
+            }
+        }
+        await refreshTargetWidgetText.Refresh();
+
+        var referenceTargetTasks = new List<Task>();
+        foreach (var widgetText in widgetTexts)
+        {
+            if (widgetText.WidgetTextGenerator.GetGeneratorReferences().Contains(refreshTargetWidgetText.WidgetTextGenerator.Title))
+            {
+                referenceTargetTasks.Add(InternalOnGeneratorRefresh(widgetText, alreadyRefershedWidgets));
+            }
+        }
+        await Task.WhenAll(referenceTargetTasks);
+    }
+}
