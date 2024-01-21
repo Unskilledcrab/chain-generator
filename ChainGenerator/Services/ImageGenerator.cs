@@ -15,7 +15,7 @@ namespace ChainGenerator.Services
         {
             this.openAIService = openAIService;
             this.serviceProvider = serviceProvider;
-            this.defaultModel = Models.Dall_e_2;
+            this.defaultModel = Models.Dall_e_3;
         }
 
         public async Task<ImageCreateResponse> CreateImageAsync(ImageCreateRequest request)
@@ -50,7 +50,7 @@ namespace ChainGenerator.Services
             using (var scope = serviceProvider.CreateScope())
             {
                 var chatSession = scope.ServiceProvider.GetRequiredService<ChatSession>();
-                revisedPrompt = await chatSession.GetResponse($"Revise the following prompt for an image generator AI to include extra vivid details of what it might look like: ```{request.Prompt}```");
+                revisedPrompt = await chatSession.GetResponse($"Revise the following prompt for an image generator AI to include extra vivid visual details and remove anything that doesn't contribute to the visual details: ```{request.Prompt}```");
             }
             request.Prompt = revisedPrompt;
             return await CreateImageAsync(request);
