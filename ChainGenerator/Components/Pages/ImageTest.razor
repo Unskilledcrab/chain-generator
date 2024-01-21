@@ -16,18 +16,13 @@
             @foreach (var result in message.Results)
             {
                 <MudItem>
-                    <MudCard Square="true" Elevation="1">
+                    <MudTooltip Text="@result.RevisedPrompt">
                         <MudImage 
                             ObjectFit="ObjectFit.Contain" 
                             Src="@result.Url"
-                            Height="200" 
-                            Width="200" />
-                        <MudCardContent>
-                            <MudText Typo="Typo.h5">Revised Prompt</MudText>
-                            <MudText Typo="Typo.body2">@result.RevisedPrompt</MudText>
-                            <MudText Typo="Typo.body2">@result.Url</MudText>
-                        </MudCardContent>
-                    </MudCard>
+                            Height="400" 
+                            Width="400" />
+                    </MudTooltip>
                 </MudItem>
             }
         }
