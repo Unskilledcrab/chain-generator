@@ -1,20 +1,31 @@
 ﻿@page "/widgettexttest"
 
-@foreach (var generator in generators)
-{
-    <WidgetText WidgetTextGenerator="@generator" OnRefresh="OnGeneratorRefresh" Parent="@this" />
-}
 
-
-<MudTextField @bind-Value="userPrompt" @onkeydown="@OnKeyDown" Immediate="true" Label="User Prompt" HelperText="" Variant="Variant.Outlined" />
+<MudTextField @bind-Value="userPrompt" @onkeydown="@OnKeyDown" Immediate="true" Label="New Generator Title" HelperText="" Variant="Variant.Outlined" />
 <br />
 <MudButton ButtonType="ButtonType.Submit"
            Variant="Variant.Filled"
            Color="Color.Primary"
            OnClick="@(() => Submit())"
            Class="ml-auto">
-    Submit
+    Add Generator
 </MudButton>
+<br />
+
+<MudGrid Justify="Justify.SpaceEvenly">
+@foreach (var generator in generators)
+{
+    <MudItem xs="4">
+        <WidgetText 
+            WidgetTextGenerator="@generator" 
+            OnRefresh="OnGeneratorRefresh" 
+            OnDelete="() => OnDelete(generator)"
+            Parent="@this" />
+    </MudItem>
+}
+</MudGrid>
+
+
 
 @code {
     private List<WidgetText> widgetTexts = new List<WidgetText>();
@@ -22,15 +33,7 @@
     {
         new WidgetTextGenerator
         {
-            Title = "Test Title 1",
-        },
-        new WidgetTextGenerator
-        {
-            Title = "Test Title 2",
-        },
-        new WidgetTextGenerator
-        {
-            Title = "Test Title 3",
+            Title = "Test",
         },
     };
 
@@ -56,6 +59,11 @@
     public void AddWidgetText(WidgetText widgetText)
     {
         widgetTexts.Add(widgetText);
+    }
+
+    private void OnDelete(WidgetTextGenerator widgetTextGenerator)
+    {
+        generators.Remove(widgetTextGenerator);
     }
 
     private async Task OnGeneratorRefresh(WidgetText refreshTargetWidgetText)
