@@ -5,32 +5,57 @@
     <MudCardHeader>
         <CardHeaderContent>
             <MudText Typo="Typo.h6">@WidgetTextGenerator.Title</MudText>
-        </CardHeaderContent>
-        <CardHeaderActions>
-            <MudIconButton OnClick="OnRefreshAsync" Icon="@Icons.Material.Filled.Refresh" Color="Color.Default" />
-            <MudIconButton OnClick="OnDelete" Icon="@Icons.Material.Filled.DeleteForever" Color="Color.Default" />
-        </CardHeaderActions>
-    </MudCardHeader>
-    <MudCardContent>
-        <MudTextField 
-            T="string" 
-            @bind-Text="@WidgetTextGenerator.Prompt" 
-            Label="Insert Prompt Here" 
-            Immediate="true"
-            DebounceInterval="200"
-            OnDebounceIntervalElapsed="OnPromptChanged"
-            HelperText="@promptHelpText"
-            AutoGrow />
-        <MudTextField 
-            T="string" 
-            Disabled="true" 
-            Placeholder="@placeHolderText"
-            Text="@WidgetTextGenerator.GeneratedOutput" 
-            AutoGrow />
+            </CardHeaderContent>
+            <CardHeaderActions>
+                <MudToggleIconButton @bind-Toggled="@WidgetTextGenerator.IsTextGenerator"
+                                     Icon="@Icons.Material.Filled.Comment" Color="Color.Default" Title="Text Generator"
+                                     ToggledIcon="@Icons.Material.Filled.Image" ToggledColor="Color.Default" ToggledTitle="Image Generator" />
+                <MudButton Disabled="@refreshInProgress" OnClick="OnRefreshAsync">
+                    @if (refreshInProgress)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                        <MudText Class="ms-2">Generating...</MudText>
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.Refresh" Color="Color.Default" />
+                        <MudText Class="ms-2">Generate</MudText>
+                    }
+                </MudButton>
+                <MudIconButton OnClick="OnDelete" Icon="@Icons.Material.Filled.DeleteForever" Color="Color.Error" />
+            </CardHeaderActions>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudTextField T="string"
+                          @bind-Text="@WidgetTextGenerator.Prompt"
+                          Label="Insert Prompt Here"
+                          Immediate="true"
+                          DebounceInterval="200"
+                          OnDebounceIntervalElapsed="OnPromptChanged"
+                          HelperText="@promptHelpText"
+                        AutoGrow />
+        @if (WidgetTextGenerator.IsTextGenerator)
+        {
+            <MudTextField T="string"
+                          Placeholder="@placeHolderText"
+                          @bind-Text="@WidgetTextGenerator.GeneratedOutput"
+                            AutoGrow />
+        }
+        else
+        {
+            if (WidgetTextGenerator.GeneratedImageUrl == null)
+            {
+                <MudTextField T="string" Disabled="true" Text="Click the generate button to create an image"/>
+            }
+            <MudImage
+                Fluid="true"
+                ObjectFit="ObjectFit.Contain"
+                      Src="@WidgetTextGenerator.GeneratedImageUrl" />
+        }
     </MudCardContent>
 </MudCard>
 
- @code {
+@code {
     [Parameter]
     public ChainGeneratorPage Parent { get; set; }
 
@@ -45,6 +70,7 @@
     public EventCallback OnDelete { get; set; }
 
     private string promptHelpText { get; set; }
+    private bool refreshInProgress { get; set; } = false;
 
     private async Task OnRefreshAsync()
     {
@@ -72,21 +98,53 @@
 
     public async Task Refresh()
     {
+        try
+        {
+            refreshInProgress = true;
         using (var scope = ServiceProvider.CreateScope())
         {
-            var chatSession = scope.ServiceProvider.GetRequiredService<ChatSession>();
-            var sb = new StringBuilder();
-            WidgetTextGenerator.GeneratedOutput = string.Empty;
-
-            await foreach (var responseSegment in chatSession.GetResponseStream(WidgetTextGenerator.GetFinalPrompt()))
-            {
-                sb.Append(responseSegment);
-                WidgetTextGenerator.GeneratedOutput = sb.ToString();
-                StateHasChanged();
-                await Task.Yield();
+                if (WidgetTextGenerator.IsTextGenerator)
+            {                
+                await RefreshTextGenerator(scope);
             }
-
-            WidgetTextGenerator.GeneratedOutput = WidgetTextGenerator.GeneratedOutput.Trim();
+            else
+            {
+                await RefreshImageGenerator(scope);
+            }
+        }
+        }
+        finally
+        {
+            refreshInProgress = false;
         }
     }
+
+    public async Task RefreshTextGenerator(IServiceScope scope)
+    {
+        var chatSession = scope.ServiceProvider.GetRequiredService<ChatSession>();
+        var sb = new StringBuilder();
+        WidgetTextGenerator.GeneratedOutput = string.Empty;
+
+        await foreach (var responseSegment in chatSession.GetResponseStream(WidgetTextGenerator.GetFinalPrompt()))
+        {
+            sb.Append(responseSegment);
+            WidgetTextGenerator.GeneratedOutput = sb.ToString();
+            StateHasChanged();
+            await Task.Yield();
+        }
+
+        WidgetTextGenerator.GeneratedOutput = WidgetTextGenerator.GeneratedOutput.Trim();
+    }
+
+    public async Task RefreshImageGenerator(IServiceScope scope)
+    {
+        var imageGenerator = scope.ServiceProvider.GetRequiredService<ImageGenerator>();
+        var response = await imageGenerator.CreateImageWithPromptRevisionAsync(new ImageCreateRequest
+            {
+                Prompt = WidgetTextGenerator.GetFinalPrompt()
+            });
+
+        WidgetTextGenerator.GeneratedImageUrl = response.Results.First().Url;
+    }
+
 }

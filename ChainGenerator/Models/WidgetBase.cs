@@ -54,7 +54,9 @@ namespace ChainGenerator.Models
     public class WidgetTextGenerator : WidgetGenerator
     {
         public bool ManualPromptOverride { get; set; } = false;
+        public bool IsTextGenerator { get; set; } = true;
         public string? GeneratedOutput { get; set; }
+        public string? GeneratedImageUrl { get; set; }
 
         public string? GetFinalOutput()
         {

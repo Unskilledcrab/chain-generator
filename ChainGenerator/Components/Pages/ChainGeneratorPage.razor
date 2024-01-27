@@ -1,21 +1,33 @@
 ﻿@page "/"
+@using System.Text.Json
 
+@inject IJSRuntime JSRuntime
 
-<MudTextField @bind-Value="userPrompt" @onkeydown="@OnKeyDown" Immediate="true" Label="New Generator Title" HelperText="" Variant="Variant.Outlined" />
+<MudTextField 
+    @bind-Value="userPrompt" 
+    @onkeydown="@OnKeyDown" 
+    Immediate="true" 
+    Label="New Generator Title" 
+    HelperText="" 
+    Variant="Variant.Outlined" 
+    AdornmentIcon="@Icons.Material.Filled.Add"
+    Adornment="Adornment.End"
+    OnAdornmentClick="Submit"/>
 <br />
-<MudButton ButtonType="ButtonType.Submit"
-           Variant="Variant.Filled"
-           Color="Color.Primary"
-           OnClick="@(() => Submit())"
-           Class="ml-auto">
-    Add Generator
-</MudButton>
+<MudFileUpload T="IBrowserFile" FilesChanged="Import">
+    <ButtonTemplate>
+        <MudButtonGroup Color="Color.Primary" Variant="Variant.Outlined">
+            <MudButton StartIcon="@Icons.Material.Filled.Save" aria-label="delete" OnClick="Download">Save Generators</MudButton>
+            <MudButton StartIcon="@Icons.Material.Filled.UploadFile" aria-label="upload file" for="@context.Id" HtmlTag="label">Import Generator</MudButton>
+        </MudButtonGroup>
+    </ButtonTemplate>
+</MudFileUpload>
 <br />
 
 <MudGrid Justify="Justify.SpaceEvenly">
     @foreach (var generator in generators)
     {
-        <MudItem xs="4">
+        <MudItem xs="12" md="6" xl="4">
             <WidgetText WidgetTextGenerator="@generator"
                         OnRefresh="OnGeneratorRefresh"
                         OnDelete="() => OnDelete(generator)"
@@ -23,8 +35,6 @@
         </MudItem>
     }
 </MudGrid>
-
-
 
 @code {
     private List<WidgetText> widgetTexts = new List<WidgetText>();
@@ -35,9 +45,16 @@
             Title = "Test",
         },
     };
-
-
+    private IJSObjectReference? module;
     private string userPrompt { get; set; } = "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            module = await JSRuntime.InvokeAsync<IJSObjectReference>("import", "./js/chainGenerator.js");
+        }
+    }
 
     private async Task OnKeyDown(KeyboardEventArgs e)
     {
@@ -47,12 +64,51 @@
         }
     }
 
+    private async Task Import(IBrowserFile browserFile)
+    {
+        // Read the file and deserialize it into a list of generators
+        var content = await new StreamReader(browserFile.OpenReadStream()).ReadToEndAsync();        
+        var newGenerators = JsonSerializer.Deserialize<List<WidgetTextGenerator>>(content);
+        if (newGenerators != null)
+        {
+            for (int i = generators.Count - 1; i >= 0; i--)
+            {
+                generators.RemoveAt(i);
+            }
+            foreach (var newGenerator in newGenerators)
+            {                
+                generators.Add(newGenerator);
+            }
+        }
+    }
+
+    private async Task Download()
+    {
+        // Download the generators as a json file
+        var json = JsonSerializer.Serialize(generators);
+        await module.InvokeVoidAsync("download", json, "generators.json", "application/json");
+    }
+
     private async Task Submit()
     {
+        var originalPrompt = userPrompt;
+        // Check if any widgets have the title matching the user prompt and update the user prompt to a unique title
+        if (widgetTexts.Any(x => x.WidgetTextGenerator.Title == userPrompt))
+        {
+            userPrompt = userPrompt + " (1)";
+            var i = 2;
+            while (widgetTexts.Any(x => x.WidgetTextGenerator.Title == userPrompt))
+            {
+                userPrompt = userPrompt.Replace($" ({i - 1})", $" ({i})");
+                i++;
+            }
+        }
+
         generators.Add(new WidgetTextGenerator
             {
                 Title = userPrompt,
             });
+        userPrompt = originalPrompt;
     }
 
     public void AddWidgetText(WidgetText widgetText)
@@ -79,7 +135,10 @@
         }
         alreadyRefershedWidgets.Add(refreshTargetWidgetText);
 
+        // Reset the generated prompt incase any references were updated
         refreshTargetWidgetText.WidgetTextGenerator.GeneratedPrompt = refreshTargetWidgetText.WidgetTextGenerator.Prompt;
+
+        // Set the target widgets genearted prompt from the references and generate
         foreach (var referencedWidget in refreshTargetWidgetText.WidgetTextGenerator.GetGeneratorReferences())
         {
             foreach (var generator in generators)
@@ -92,6 +151,7 @@
         }
         await refreshTargetWidgetText.Refresh();
 
+        // See if any other widget references this one because it should now be re-generated if it does
         var referenceTargetTasks = new List<Task>();
         foreach (var widgetText in widgetTexts)
         {
