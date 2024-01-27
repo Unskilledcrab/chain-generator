@@ -1,4 +1,4 @@
-﻿@page "/widgettexttest"
+﻿@page "/"
 
 
 <MudTextField @bind-Value="userPrompt" @onkeydown="@OnKeyDown" Immediate="true" Label="New Generator Title" HelperText="" Variant="Variant.Outlined" />
@@ -13,16 +13,15 @@
 <br />
 
 <MudGrid Justify="Justify.SpaceEvenly">
-@foreach (var generator in generators)
-{
-    <MudItem xs="4">
-        <WidgetText 
-            WidgetTextGenerator="@generator" 
-            OnRefresh="OnGeneratorRefresh" 
-            OnDelete="() => OnDelete(generator)"
-            Parent="@this" />
-    </MudItem>
-}
+    @foreach (var generator in generators)
+    {
+        <MudItem xs="4">
+            <WidgetText WidgetTextGenerator="@generator"
+                        OnRefresh="OnGeneratorRefresh"
+                        OnDelete="() => OnDelete(generator)"
+                        Parent="@this" />
+        </MudItem>
+    }
 </MudGrid>
 
 
@@ -51,9 +50,9 @@
     private async Task Submit()
     {
         generators.Add(new WidgetTextGenerator
-        {
-            Title = userPrompt,
-        });
+            {
+                Title = userPrompt,
+            });
     }
 
     public void AddWidgetText(WidgetText widgetText)
