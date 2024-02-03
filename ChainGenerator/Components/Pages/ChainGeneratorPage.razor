@@ -30,7 +30,7 @@
 <MudGrid Justify="Justify.SpaceEvenly">
     @foreach (var generator in generators)
     {
-        <MudItem xs="12" md="6" xl="4">
+        <MudItem>
             <WidgetGenerator WidgetGeneratorModel="@generator"
                              OnRefresh="OnGeneratorRefresh"
                              OnTitleEdited="OnTitleEdited"
