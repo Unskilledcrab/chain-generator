@@ -1,0 +1,212 @@
+﻿@using System.Text
+@inject IServiceProvider ServiceProvider
+
+<!-- The main card that contains the widget generator -->
+<MudCard Outlined="true">
+    <!-- The card header contains the title and action buttons -->
+    <MudCardHeader>
+        <CardHeaderContent>
+            <!-- If the title is being edited, show a text field. Otherwise, show the title as text. -->
+            @if (isEditingTitle)
+            {
+                <MudTextField T="string"
+                              Margin="Margin.None"
+                              @ref="titleRef"
+                              @bind-Text="@WidgetGeneratorModel.Title"
+                              OnBlur="OnTitleEditedEnded" />
+            }
+            else
+            {
+                <MudText Typo="Typo.h6" @onclick="OnTitleEditedStarted">@WidgetGeneratorModel.Title</MudText>
+            }
+        </CardHeaderContent>
+        <CardHeaderActions>
+            <!-- Toggle button for switching between text and image generator -->
+            <MudToggleIconButton @bind-Toggled="@WidgetGeneratorModel.IsTextGenerator"
+                                 Icon="@Icons.Material.Filled.Image" Color="Color.Default" Title="Change to Text Generator"
+                                 ToggledIcon="@Icons.Material.Filled.Comment" ToggledColor="Color.Default" ToggledTitle="Change to Image Generator" />
+            <!-- Refresh button for generating the output -->
+            <MudButton Disabled="@refreshInProgress" OnClick="OnRefreshAsync">
+                @if (refreshInProgress)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                    <MudText Class="ms-2">Generating...</MudText>
+                }
+                else
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.Refresh" Color="Color.Default" />
+                    <MudText Class="ms-2">Generate</MudText>
+                }
+            </MudButton>
+            <!-- Delete button for deleting the generator -->
+            <MudIconButton OnClick="OnDelete" Icon="@Icons.Material.Filled.DeleteForever" Color="Color.Error" />
+        </CardHeaderActions>
+    </MudCardHeader>
+    <!-- The card content contains the prompt and the generated output -->
+    <MudCardContent>
+        <!-- Text field for entering the prompt -->
+        <MudTextField T="string"
+                      @bind-Text="@WidgetGeneratorModel.Prompt"
+                      Label="Insert Prompt Here"
+                      Immediate="true"
+                      DebounceInterval="200"
+                      OnDebounceIntervalElapsed="OnPromptChanged"
+                      HelperText="@promptHelpText"
+                        AutoGrow />
+         <!-- If the generator is a text generator, show a text field for the output. Otherwise, show an image. -->
+         @if (WidgetGeneratorModel.IsTextGenerator)
+        {
+            <MudTextField T="string"
+                          Placeholder="@placeHolderText"
+                          @bind-Text="@WidgetGeneratorModel.GeneratedOutput"
+                            AutoGrow />
+        }
+        else
+        {
+            if (WidgetGeneratorModel.GeneratedImageUrl == null)
+            {
+                <MudTextField T="string" Disabled="true" Text="Click the generate button to create an image" />
+            }
+            <MudImage Fluid="true"
+                      ObjectFit="ObjectFit.Contain"
+                      Src="@WidgetGeneratorModel.GeneratedImageUrl" />
+        }
+    </MudCardContent>
+</MudCard>
+
+@code {
+    // Parameters and fields for the component
+    [Parameter]
+    public ChainGeneratorPage Parent { get; set; }  // Parent page
+
+    [EditorRequired]
+    [Parameter]
+    public WidgetGeneratorModel WidgetGeneratorModel { get; set; }  // Model for the widget generator
+
+    [Parameter]
+    public EventCallback<WidgetGenerator> OnRefresh { get; set; }  // Event for refreshing the generator
+
+    [Parameter]
+    public EventCallback<(string, string)> OnTitleEdited { get; set; }  // Event for editing the title
+
+    [Parameter]
+    public EventCallback OnDelete { get; set; }  // Event for deleting the generator
+
+    private string promptHelpText { get; set; }  // Help text for the prompt
+    private string previousTitle { get; set; }  // Previous title before editing
+    private bool refreshInProgress { get; set; } = false;  // Flag for whether a refresh is in progress
+    private bool isEditingTitle { get; set; } = false;  // Flag for whether the title is being edited
+    private MudTextField<string>? titleRef { get; set; }  // Reference to the title text field
+
+    // Methods for handling events and refreshing the generator
+    private async Task OnRefreshAsync()
+    {
+        await OnRefresh.InvokeAsync(this);  // Invoke the refresh event to let the parent page know the generator and it's possible references need to be refreshed
+    }
+
+    private async Task OnTitleEditedStarted()
+    {
+        isEditingTitle = true;  // Start editing the title
+        previousTitle = WidgetGeneratorModel.Title;  // Save the previous title
+        StateHasChanged();  // Update the component state
+        await Task.CompletedTask;
+        if (titleRef != null)
+        {
+            await titleRef.FocusAsync();  // Focus on the title text field
+        }
+    }
+
+    private async Task OnTitleEditedEnded()
+    {
+        await OnTitleEdited.InvokeAsync((previousTitle, WidgetGeneratorModel.Title));  // Invoke the title edited event to let the parent page know the title has been edited
+        isEditingTitle = false;  // End editing the title
+    }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Parent?.AddWidgetGenerator(this);  // Add this widget generator to the parent page
+    }
+
+    public void OnPromptChanged(string newPrompt)
+    {
+        promptHelpText = "Reference another generator by putting it's title in brackets\nExample: {{Title}}";
+        if (WidgetGeneratorModel.ContainsGeneratorTitleReferences())
+        {
+            promptHelpText = $"Referencing the following widgets: {string.Join(", ", WidgetGeneratorModel.GetGeneratorTitleReferences())}";  // Update the prompt help text
+        }
+    }
+
+    private string placeHolderText => WidgetGeneratorModel.ContainsGeneratorTitleReferences() ?
+        $"Generating as soon as the following widgets have been generated: {string.Join(", ", WidgetGeneratorModel.GetGeneratorTitleReferences())}" :
+        "Click the refresh button to generate text";  // Placeholder text for the output text field
+
+    public async Task Refresh()
+    {
+        try
+        {
+            refreshInProgress = true;  // Start the refresh
+            using (var scope = ServiceProvider.CreateScope())
+            {
+                if (WidgetGeneratorModel.IsTextGenerator)
+                {
+                    await RefreshTextGenerator(scope);  // Refresh the text generator
+                }
+                else
+                {
+                    await RefreshImageGenerator(scope);  // Refresh the image generator
+                }
+            }
+        }
+        finally
+        {
+            refreshInProgress = false;  // End the refresh
+        }
+    }
+
+    public async Task RefreshTextGenerator(IServiceScope scope)
+    {
+        var chatSession = scope.ServiceProvider.GetRequiredService<ChatSession>();  // Get the chat session service
+        var sb = new StringBuilder();
+        WidgetGeneratorModel.GeneratedOutput = string.Empty;  // Clear the generated output
+
+        await foreach (var responseSegment in chatSession.GetResponseStream(WidgetGeneratorModel.GetFinalPrompt()))
+        {
+            sb.Append(responseSegment);  // Append the response segment to the output
+            WidgetGeneratorModel.GeneratedOutput = sb.ToString();  // Update the generated output
+            StateHasChanged();  // Update the component state
+            await Task.Yield();
+        }
+
+        WidgetGeneratorModel.GeneratedOutput = WidgetGeneratorModel.GeneratedOutput.Trim();  // Trim the generated output
+    }
+
+    public async Task RefreshImageGenerator(IServiceScope scope)
+    {
+        var imageGenerator = scope.ServiceProvider.GetRequiredService<ImageGenerator>();  // Get the image generator service
+        var response = await imageGenerator.CreateImageWithPromptRevisionAsync(new ImageCreateRequest
+            {
+                Prompt = WidgetGeneratorModel.GetFinalPrompt()  // Create an image with the final prompt
+            });
+
+        WidgetGeneratorModel.GeneratedImageUrl = response.Results.First().Url;  // Update the generated image URL
+
+        using (var httpClient = new HttpClient())
+        {
+            var imageBytes = await httpClient.GetByteArrayAsync(WidgetGeneratorModel.GeneratedImageUrl);  // Get the image bytes
+            var imageFileName = $"{Guid.NewGuid().ToString()}.png";  // Generate a file name for the image
+            await SaveImage(imageBytes, imageFileName);  // Save the image
+            WidgetGeneratorModel.GeneratedImageUrl = $"/images/{imageFileName}";  // Update the generated image URL
+        }
+    }
+
+    private async Task SaveImage(byte[] imageBytes, string fileName)
+    {
+        var imagePath = Path.Combine("wwwroot", "images", fileName);  // Get the image path
+
+        using (var fileStream = new FileStream(imagePath, FileMode.Create))
+        {
+            await fileStream.WriteAsync(imageBytes);  // Write the image bytes to the file
+        }
+    }
+}

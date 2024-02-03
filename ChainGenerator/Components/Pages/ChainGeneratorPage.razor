@@ -1,19 +1,21 @@
-﻿@page "/"
-@using System.Text.Json
+﻿@page "/"  
+@using System.Text.Json  
 
 @inject IJSRuntime JSRuntime
 
-<MudTextField 
-    @bind-Value="userPrompt" 
-    @onkeydown="@OnKeyDown" 
-    Immediate="true" 
-    Label="New Generator Title" 
-    HelperText="" 
-    Variant="Variant.Outlined" 
-    AdornmentIcon="@Icons.Material.Filled.Add"
-    Adornment="Adornment.End"
-    OnAdornmentClick="Submit"/>
+<!-- Text field for entering the new generator title -->
+<MudTextField @bind-Value="newGeneratorTitle"
+              @onkeydown="@OnKeyDown"
+              Immediate="true"
+              Label="New Generator Title"
+              HelperText=""
+              Variant="Variant.Outlined"
+              AdornmentIcon="@Icons.Material.Filled.Add"
+              Adornment="Adornment.End"
+              OnAdornmentClick="Submit" />
 <br />
+
+<!-- File upload component for importing generators -->
 <MudFileUpload T="IBrowserFile" FilesChanged="Import">
     <ButtonTemplate>
         <MudButtonGroup Color="Color.Primary" Variant="Variant.Outlined">
@@ -24,140 +26,181 @@
 </MudFileUpload>
 <br />
 
+<!-- Grid for displaying the generators -->
 <MudGrid Justify="Justify.SpaceEvenly">
     @foreach (var generator in generators)
     {
         <MudItem xs="12" md="6" xl="4">
-            <WidgetText WidgetTextGenerator="@generator"
-                        OnRefresh="OnGeneratorRefresh"
-                        OnDelete="() => OnDelete(generator)"
-                        Parent="@this" />
+            <WidgetGenerator WidgetGeneratorModel="@generator"
+                             OnRefresh="OnGeneratorRefresh"
+                             OnTitleEdited="OnTitleEdited"
+                             OnDelete="() => OnDelete(generator)"
+                             Parent="@this" />
         </MudItem>
     }
 </MudGrid>
 
 @code {
-    private List<WidgetText> widgetTexts = new List<WidgetText>();
-    private List<WidgetTextGenerator> generators = new List<WidgetTextGenerator>
+    // List of widget generators
+    private List<WidgetGenerator> widgetGenerators = new List<WidgetGenerator>();
+    // List of generator models
+    private List<WidgetGeneratorModel> generators = new List<WidgetGeneratorModel>
     {
-        new WidgetTextGenerator
+        new WidgetGeneratorModel
         {
             Title = "Test",
         },
     };
+    // Reference to the JavaScript module
     private IJSObjectReference? module;
-    private string userPrompt { get; set; } = "";
+    // Title for the new generator
+    private string newGeneratorTitle { get; set; } = "";
 
+    // Method called after the component is rendered
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
+            // Import the JavaScript module
             module = await JSRuntime.InvokeAsync<IJSObjectReference>("import", "./js/chainGenerator.js");
         }
     }
 
+    // Method called when a key is pressed in the text field
     private async Task OnKeyDown(KeyboardEventArgs e)
     {
         if (e.Code == "Enter" || e.Code == "NumpadEnter")
         {
+            // Submit the form if the Enter key is pressed
             await Submit();
         }
     }
 
+    // Method for importing generators from a file
     private async Task Import(IBrowserFile browserFile)
     {
         // Read the file and deserialize it into a list of generators
-        var content = await new StreamReader(browserFile.OpenReadStream()).ReadToEndAsync();        
-        var newGenerators = JsonSerializer.Deserialize<List<WidgetTextGenerator>>(content);
+        var content = await new StreamReader(browserFile.OpenReadStream()).ReadToEndAsync();
+        var newGenerators = JsonSerializer.Deserialize<List<WidgetGeneratorModel>>(content);
         if (newGenerators != null)
         {
+            // Remove all existing generators
             for (int i = generators.Count - 1; i >= 0; i--)
             {
                 generators.RemoveAt(i);
             }
+            // Add the new generators
             foreach (var newGenerator in newGenerators)
-            {                
+            {
                 generators.Add(newGenerator);
             }
         }
     }
 
+    // Method for downloading the generators as a JSON file
     private async Task Download()
     {
-        // Download the generators as a json file
         var json = JsonSerializer.Serialize(generators);
         await module.InvokeVoidAsync("download", json, "generators.json", "application/json");
     }
 
+    // Method for submitting the form
     private async Task Submit()
     {
-        var originalPrompt = userPrompt;
-        // Check if any widgets have the title matching the user prompt and update the user prompt to a unique title
-        if (widgetTexts.Any(x => x.WidgetTextGenerator.Title == userPrompt))
-        {
-            userPrompt = userPrompt + " (1)";
-            var i = 2;
-            while (widgetTexts.Any(x => x.WidgetTextGenerator.Title == userPrompt))
+        var originalPrompt = newGeneratorTitle;
+        newGeneratorTitle = GetUniqueTitle(newGeneratorTitle);
+
+        // Add a new generator with the unique title
+        generators.Add(new WidgetGeneratorModel
             {
-                userPrompt = userPrompt.Replace($" ({i - 1})", $" ({i})");
+                Title = newGeneratorTitle,
+            });
+        newGeneratorTitle = originalPrompt;
+    }
+
+    // Method for getting a unique title
+    private string GetUniqueTitle(string title)
+    {
+        if (widgetGenerators.Any(x => x.WidgetGeneratorModel.Title == title))
+        {
+            if (!title.EndsWith(" (1)"))
+            {
+                title += " (1)";
+            }
+            var i = 2;
+            while (widgetGenerators.Any(x => x.WidgetGeneratorModel.Title == title))
+            {
+                title = title.Replace($" ({i - 1})", $" ({i})");
                 i++;
             }
         }
-
-        generators.Add(new WidgetTextGenerator
-            {
-                Title = userPrompt,
-            });
-        userPrompt = originalPrompt;
+        return title;
     }
 
-    public void AddWidgetText(WidgetText widgetText)
+    // Method for adding a widget generator
+    public void AddWidgetGenerator(WidgetGenerator WidgetGenerator)
     {
-        widgetTexts.Add(widgetText);
+        widgetGenerators.Add(WidgetGenerator);
     }
 
-    private void OnDelete(WidgetTextGenerator widgetTextGenerator)
+    // Method for deleting a generator
+    private void OnDelete(WidgetGeneratorModel WidgetGeneratorModel)
     {
-        generators.Remove(widgetTextGenerator);
+        generators.Remove(WidgetGeneratorModel);
     }
 
-    private async Task OnGeneratorRefresh(WidgetText refreshTargetWidgetText)
+    // Method for refreshing a generator
+    private async Task OnGeneratorRefresh(WidgetGenerator refreshTargetWidgetGenerator)
     {
-        await InternalOnGeneratorRefresh(refreshTargetWidgetText);
+        await InternalOnGeneratorRefresh(refreshTargetWidgetGenerator);
     }
 
-    private async Task InternalOnGeneratorRefresh(WidgetText refreshTargetWidgetText, List<WidgetText>? alreadyRefershedWidgets = null)
+    // Method for editing the title of a generator
+    private void OnTitleEdited((string previousTitle, string newTitle) title)
     {
-        alreadyRefershedWidgets ??= new List<WidgetText>();
-        if (alreadyRefershedWidgets.Contains(refreshTargetWidgetText))
+        foreach (var generator in generators)
+        {
+            generator.Prompt = generator.Prompt?.Replace("{{" + title.previousTitle + "}}", "{{" + title.newTitle + "}}");
+        }
+    }
+
+    // Internal method for refreshing a generator
+    private async Task InternalOnGeneratorRefresh(WidgetGenerator refreshTargetWidgetGenerator, List<WidgetGenerator>? alreadyRefershedWidgets = null)
+    {
+        // Create a cache list of already refreshed widgets to prevent infinite loops
+        alreadyRefershedWidgets ??= new List<WidgetGenerator>();
+        if (alreadyRefershedWidgets.Contains(refreshTargetWidgetGenerator))
         {
             return;
         }
-        alreadyRefershedWidgets.Add(refreshTargetWidgetText);
+        // Add the current widget to the cache list to prevent infinite loops
+        alreadyRefershedWidgets.Add(refreshTargetWidgetGenerator);
 
-        // Reset the generated prompt incase any references were updated
-        refreshTargetWidgetText.WidgetTextGenerator.GeneratedPrompt = refreshTargetWidgetText.WidgetTextGenerator.Prompt;
+        // Reset the generated prompt in case any references were updated
+        refreshTargetWidgetGenerator.WidgetGeneratorModel.GeneratedPrompt = refreshTargetWidgetGenerator.WidgetGeneratorModel.Prompt;
 
-        // Set the target widgets genearted prompt from the references and generate
-        foreach (var referencedWidget in refreshTargetWidgetText.WidgetTextGenerator.GetGeneratorReferences())
+        // Set the target widgets generated prompt from the references and generate
+        foreach (var referencedWidgetTitle in refreshTargetWidgetGenerator.WidgetGeneratorModel.GetGeneratorTitleReferences())
         {
             foreach (var generator in generators)
             {
-                if (generator.Title == referencedWidget)
+                // If the generator title matches the reference, replace this generators reference with the final output (usually the generated output of the referenced generator)
+                if (generator.Title == referencedWidgetTitle)
                 {
-                    refreshTargetWidgetText.WidgetTextGenerator.GeneratedPrompt = refreshTargetWidgetText.WidgetTextGenerator.GeneratedPrompt.Replace("{{" + referencedWidget + "}}", generator.GetFinalOutput());
+                    refreshTargetWidgetGenerator.WidgetGeneratorModel.GeneratedPrompt = refreshTargetWidgetGenerator.WidgetGeneratorModel.GeneratedPrompt?.Replace("{{" + referencedWidgetTitle + "}}", generator.GeneratedOutput);
                 }
             }
         }
-        await refreshTargetWidgetText.Refresh();
+        // Now that the prompt is updated, generate the final output
+        await refreshTargetWidgetGenerator.Refresh();
 
         // See if any other widget references this one because it should now be re-generated if it does
         var referenceTargetTasks = new List<Task>();
-        foreach (var widgetText in widgetTexts)
+        foreach (var WidgetGenerator in widgetGenerators)
         {
-            if (widgetText.WidgetTextGenerator.GetGeneratorReferences().Contains(refreshTargetWidgetText.WidgetTextGenerator.Title))
+            if (WidgetGenerator.WidgetGeneratorModel.GetGeneratorTitleReferences().Contains(refreshTargetWidgetGenerator.WidgetGeneratorModel.Title))
             {
-                referenceTargetTasks.Add(InternalOnGeneratorRefresh(widgetText, alreadyRefershedWidgets));
+                referenceTargetTasks.Add(InternalOnGeneratorRefresh(WidgetGenerator, alreadyRefershedWidgets));
             }
         }
         await Task.WhenAll(referenceTargetTasks);
