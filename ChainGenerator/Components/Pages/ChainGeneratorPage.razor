@@ -15,7 +15,7 @@
               OnAdornmentClick="Submit" />
 <br />
 
-<!-- File upload component for importing generators -->
+<!-- File upload component for importing pageModel.WidgetGeneratorModels -->
 <MudFileUpload T="IBrowserFile" FilesChanged="Import">
     <ButtonTemplate>
         <MudButtonGroup Color="Color.Primary" Variant="Variant.Outlined">
@@ -26,9 +26,9 @@
 </MudFileUpload>
 <br />
 
-<!-- Grid for displaying the generators -->
+<!-- Grid for displaying the pageModel.WidgetGeneratorModels -->
 <MudGrid Justify="Justify.SpaceEvenly">
-    @foreach (var generator in generators)
+    @foreach (var generator in pageModel.WidgetGeneratorModels)
     {
         <MudItem>
             <WidgetGenerator WidgetGeneratorModel="@generator"
@@ -41,16 +41,9 @@
 </MudGrid>
 
 @code {
-    // List of widget generators
-    private List<WidgetGenerator> widgetGenerators = new List<WidgetGenerator>();
-    // List of generator models
-    private List<WidgetGeneratorModel> generators = new List<WidgetGeneratorModel>
-    {
-        new WidgetGeneratorModel
-        {
-            Title = "Test",
-        },
-    };
+    private List<WidgetGenerator> widgetGenerators = new();
+    private ChainGeneratorPageModel pageModel = new();
+
     // Reference to the JavaScript module
     private IJSObjectReference? module;
     // Title for the new generator
@@ -76,32 +69,40 @@
         }
     }
 
-    // Method for importing generators from a file
+    // Method for importing pageModel.WidgetGeneratorModels from a file
     private async Task Import(IBrowserFile browserFile)
     {
-        // Read the file and deserialize it into a list of generators
+        // Read the file and deserialize it into a list of pageModel.WidgetGeneratorModels
         var content = await new StreamReader(browserFile.OpenReadStream()).ReadToEndAsync();
-        var newGenerators = JsonSerializer.Deserialize<List<WidgetGeneratorModel>>(content);
-        if (newGenerators != null)
+
+        // Try to deserialize the content as a ChainGeneratorPageModel
+        try
         {
-            // Remove all existing generators
-            for (int i = generators.Count - 1; i >= 0; i--)
+            var newPageModel = JsonSerializer.Deserialize<ChainGeneratorPageModel>(content);
+            if (newPageModel != null)
             {
-                generators.RemoveAt(i);
-            }
-            // Add the new generators
-            foreach (var newGenerator in newGenerators)
-            {
-                generators.Add(newGenerator);
+                pageModel = newPageModel;
+                return;
             }
         }
+        catch (JsonException)
+        {
+            // If the deserialization fails, try to deserialize the content as a list of pageModel.WidgetGeneratorModels
+            var newGenerators = JsonSerializer.Deserialize<List<WidgetGeneratorModel>>(content);
+            if (newGenerators != null)
+            {
+                pageModel.WidgetGeneratorModels.Clear();
+                pageModel.WidgetGeneratorModels.AddRange(newGenerators);
+            }
+        }
+
     }
 
-    // Method for downloading the generators as a JSON file
+    // Method for downloading the pageModel.WidgetGeneratorModels as a JSON file
     private async Task Download()
     {
-        var json = JsonSerializer.Serialize(generators);
-        await module.InvokeVoidAsync("download", json, "generators.json", "application/json");
+        var json = JsonSerializer.Serialize(pageModel);
+        await module.InvokeVoidAsync("download", json, "generator.json", "application/json");
     }
 
     // Method for submitting the form
@@ -111,7 +112,7 @@
         newGeneratorTitle = GetUniqueTitle(newGeneratorTitle);
 
         // Add a new generator with the unique title
-        generators.Add(new WidgetGeneratorModel
+        pageModel.WidgetGeneratorModels.Add(new WidgetGeneratorModel
             {
                 Title = newGeneratorTitle,
             });
@@ -146,7 +147,7 @@
     // Method for deleting a generator
     private void OnDelete(WidgetGeneratorModel WidgetGeneratorModel)
     {
-        generators.Remove(WidgetGeneratorModel);
+        pageModel.WidgetGeneratorModels.Remove(WidgetGeneratorModel);
     }
 
     // Method for refreshing a generator
@@ -158,7 +159,7 @@
     // Method for editing the title of a generator
     private void OnTitleEdited((string previousTitle, string newTitle) title)
     {
-        foreach (var generator in generators)
+        foreach (var generator in pageModel.WidgetGeneratorModels)
         {
             generator.Prompt = generator.Prompt?.Replace("{{" + title.previousTitle + "}}", "{{" + title.newTitle + "}}");
         }
@@ -182,9 +183,9 @@
         // Set the target widgets generated prompt from the references and generate
         foreach (var referencedWidgetTitle in refreshTargetWidgetGenerator.WidgetGeneratorModel.GetGeneratorTitleReferences())
         {
-            foreach (var generator in generators)
+            foreach (var generator in pageModel.WidgetGeneratorModels)
             {
-                // If the generator title matches the reference, replace this generators reference with the final output (usually the generated output of the referenced generator)
+                // If the generator title matches the reference, replace this pageModel.WidgetGeneratorModels reference with the final output (usually the generated output of the referenced generator)
                 if (generator.Title == referencedWidgetTitle)
                 {
                     refreshTargetWidgetGenerator.WidgetGeneratorModel.GeneratedPrompt = refreshTargetWidgetGenerator.WidgetGeneratorModel.GeneratedPrompt?.Replace("{{" + referencedWidgetTitle + "}}", generator.GeneratedOutput);
