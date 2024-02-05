@@ -1,5 +1,7 @@
 ﻿@using System.Text
+@using ChainGenerator.Components.Dialogs
 @inject IServiceProvider ServiceProvider
+@inject IDialogService DialogService
 
 <!-- The main card that contains the widget generator -->
 <MudCard Outlined="true">
@@ -21,6 +23,8 @@
             }
         </CardHeaderContent>
         <CardHeaderActions>
+
+            <MudIconButton OnClick="SuggestPrompt" Icon="@Icons.Material.Filled.AutoFixHigh" Color="Color.Primary" />
             <!-- Toggle button for switching between text and image generator -->
             <MudToggleIconButton @bind-Toggled="@WidgetGeneratorModel.IsTextGenerator"
                                  Icon="@Icons.Material.Filled.Image" Color="Color.Default" Title="Change to Text Generator"
@@ -116,6 +120,25 @@
         }
     }
 
+    private async Task SuggestPrompt()
+    {
+        var parameters = new DialogParameters<PromptSuggestionDialog>();
+        parameters.Add(nameof(PromptSuggestionDialog.ChainGeneratorPageModel), Parent.pageModel);
+
+        var dialog = await DialogService.ShowAsync<PromptSuggestionDialog>("Suggest Prompt", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            WidgetGeneratorModel.Prompt = result.Data.ToString();
+            using (var scope = ServiceProvider.CreateScope())
+            {
+                var chatSession = scope.ServiceProvider.GetRequiredService<ChatSession>();  // Get the chat session service
+                WidgetGeneratorModel.Title = (await chatSession.GetResponse($"Create a short one or two word title that accurately describes the following: {result.Data.ToString()}")).Replace("\"","");
+            }
+        }
+    }
+
     private async Task OnTitleEditedEnded()
     {
         await OnTitleEdited.InvokeAsync((previousTitle, WidgetGeneratorModel.Title));  // Invoke the title edited event to let the parent page know the title has been edited
@@ -151,6 +174,7 @@
                 if (WidgetGeneratorModel.IsTextGenerator)
                 {
                     await RefreshTextGenerator(scope);  // Refresh the text generator
+                    await UpdatePromptIntent();  // Update the prompt intent
                 }
                 else
                 {
@@ -161,6 +185,15 @@
         finally
         {
             refreshInProgress = false;  // End the refresh
+        }
+    }
+
+    async Task UpdatePromptIntent()
+    {
+        using (var scope = ServiceProvider.CreateScope())
+        {
+            var chatSession = scope.ServiceProvider.GetRequiredService<ChatSession>();  // Get the chat session service
+            WidgetGeneratorModel.PromptIntent = await chatSession.GetResponse($"Can you give me a brief summary of what this is trying to accomplish and it's intent? ```{WidgetGeneratorModel.Prompt}```");
         }
     }
 

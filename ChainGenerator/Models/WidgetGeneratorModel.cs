@@ -8,6 +8,8 @@ namespace ChainGenerator.Models
 
         public string? Prompt { get; set; }  // The prompt for the widget generator, this can contain references to other generators
 
+        public string PromptIntent { get; set; }
+
         public string? GeneratedPrompt { get; set; }  // The generated prompt after resolving references to other generators
 
         public bool IsTextGenerator { get; set; } = true;  // Flag to indicate if the generator is a text generator
