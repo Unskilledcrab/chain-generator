@@ -3,7 +3,10 @@
 
 <!-- The badge icon which indicates an ongoing refresh -->
 @if (refreshInProgress)
-    {<MudBadge Origin="Origin.TopLeft" Color="Color.Warning" Overlap="true" Bordered="false" Icon="@badgeIcon" ></MudBadge>}
+{<MudBadge Origin="Origin.TopLeft" Color="Color.Warning" Overlap="true" Bordered="false" Icon="@badgeIcon" ></MudBadge>}
+else //Uses a transparent badge to keep the card formatting consistent 
+{<MudBadge Origin="Origin.TopLeft" Color="Color.Transparent" Overlap="true" Bordered="false" ></MudBadge>}
+
 <!-- The main card that contains the widget generator -->
 <MudCard Outlined="true">
     <!-- The card header contains the title and action buttons -->
