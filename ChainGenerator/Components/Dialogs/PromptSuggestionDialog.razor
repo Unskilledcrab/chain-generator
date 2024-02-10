@@ -1,50 +1,72 @@
 ﻿@using System.Text
 @inject IServiceProvider ServiceProvider
+@inject IWebHostEnvironment WebHostEnvironment
 
 <MudDialog>
     <DialogContent>
-        @if (selectableWidgets == null || selectableWidgets.Count == 0)
-        {
-            <MudText>No widgets available</MudText>
-        }
-        else
-        {
-            <MudText>Select the widgets you want this prompt to use</MudText>
-            @foreach (var selectableWidget in selectableWidgets)
+        <MudExpansionPanels>
+            @if (selectableWidgets?.Count > 0)
             {
-                <MudCheckBox @bind-Value="@selectableWidget.IsSelected" Label="@selectableWidget.WidgetGeneratorModel?.Title" />
+                <MudExpansionPanel Text="Select Referrences">
+                    @foreach (var selectableWidget in selectableWidgets)
+                    {
+                        <MudCheckBox @bind-Value="@selectableWidget.IsSelected" Label="@selectableWidget.WidgetGeneratorModel?.Title" />
+                    }
+                </MudExpansionPanel>
             }
-        }
-
+            <MudExpansionPanel Text="Prompt Settings">
+                <MudTextField Label="Guidance" @bind-Value="@guidance" HelperText="Example: Help me progress the story" AutoGrow="true" />
+            </MudExpansionPanel>
+            @if (WebHostEnvironment.IsDevelopment())
+            {                
+                <MudExpansionPanel Text="Suggested Prompt">
+                    <MudTextField Value="@GetSuggestionPrompt()" AutoGrow="true" />
+                </MudExpansionPanel>
+            }
+        </MudExpansionPanels>
         @if (promptSuggestionSet)
         {
-            <MudText>@promptSuggestion</MudText>
+            <MudTextField Label="New Prompt" @bind-Value="@promptSuggestion" HelperText="This will be the updated prompt" AutoGrow="true" />
         }
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="@(() => MudDialog.Cancel())">Cancel</MudButton>
-        <MudButton OnClick="@(() => GenerateSuggestion())">Generate Suggestion</MudButton>
+        <MudButton Disabled="@isBusy" OnClick="@(() => GenerateSuggestion())">
+            @if (isBusy)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                <MudText Class="ms-2">Generating...</MudText>
+            }
+            else
+            {
+                <MudIcon Icon="@Icons.Material.Filled.Refresh" Color="Color.Default" />
+                <MudText Class="ms-2">Generate Suggestion</MudText>
+            }
+        </MudButton>
         <MudButton Disabled="!promptSuggestionSet" OnClick="@(() => Submit())">Submit</MudButton>
     </DialogActions>
 </MudDialog>
 
 @code {
-    [CascadingParameter] MudDialogInstance MudDialog {get; set; }
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
 
     [Parameter] public ChainGeneratorPageModel? ChainGeneratorPageModel { get; set; }
 
     private List<SelectableWidget> selectableWidgets { get; set; } = new();
     private string promptSuggestion;
+    private string guidance = "";
     private bool promptSuggestionSet => !string.IsNullOrWhiteSpace(promptSuggestion);
+    private bool isBusy = false;
 
     protected override void OnAfterRender(bool firstRender)
     {
         if (firstRender)
         {
-            selectableWidgets = ChainGeneratorPageModel?.WidgetGeneratorModels?.Where(w => w.IsTextGenerator).Select(w => new SelectableWidget() { 
-                IsSelected = false, 
-                WidgetGeneratorModel = w
-            }).ToList();
+            selectableWidgets = ChainGeneratorPageModel?.WidgetGeneratorModels?.Where(w => w.IsTextGenerator).Select(w => new SelectableWidget()
+                {
+                    IsSelected = false,
+                    WidgetGeneratorModel = w
+                }).ToList();
             StateHasChanged();
         }
     }
@@ -59,32 +81,67 @@
 
     async Task GenerateSuggestion()
     {
+        try
+        {
+            isBusy = true;
+            var selectedWidgets = selectableWidgets.Where(w => w.IsSelected);
+            var updateTasks = selectedWidgets
+                .Where(widget => string.IsNullOrWhiteSpace(widget.WidgetGeneratorModel.PromptIntent))
+                .Select(widget => UpdatePromptIntent(widget.WidgetGeneratorModel));
+
+            await Task.WhenAll(updateTasks);
+
+            promptSuggestion = (await GetPromptSuggestion(selectedWidgets)).Trim();
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private string GetSuggestionPrompt()
+    {
         var selectedWidgets = selectableWidgets.Where(w => w.IsSelected);
-        var updateTasks = selectedWidgets
-            .Where(widget => string.IsNullOrWhiteSpace(widget.WidgetGeneratorModel.PromptIntent))
-            .Select(widget => UpdatePromptIntent(widget.WidgetGeneratorModel));
-
-        await Task.WhenAll(updateTasks);
-
-        promptSuggestion = (await GetPromptSuggestion(selectedWidgets)).Trim();
+        var sb = new StringBuilder();
+        if (selectedWidgets.Any())
+        {
+            sb.AppendLine("The following are reference you can use:");
+            foreach (var widget in selectedWidgets)
+            {
+                sb.AppendLine("{");
+                sb.AppendLine($"\t\"Reference\": \"{{{{{widget.WidgetGeneratorModel.Title}}}}}\"");
+                sb.AppendLine($"\t\"Intent\": \"{widget.WidgetGeneratorModel.PromptIntent}\"");
+                sb.AppendLine("}");
+            }
+            sb.AppendLine($"Use all of the above create a new prompt for an LLM that will use the ideas in \"Intent\" and branch off to explore a new idea related to all of the intents. Format the new prompt where you reference all the other intents. For example, for the first intent reference {{{{{selectedWidgets.First().WidgetGeneratorModel.Title}}}}} a new prompt for the LLM with this reference could look like: \"Explain more about what makes {{{selectedWidgets.First().WidgetGeneratorModel.Title}}} interesting and unique\". Only return the new prompt and be sure to include references in double curly brackets.");
+        }
+        if (!string.IsNullOrWhiteSpace(guidance))
+        {
+            sb.AppendLine();
+            sb.AppendLine(guidance);
+        }
+        if (sb.Length == 0)
+        {
+            sb.AppendLine("Create a prompt for an LLM that would be interesting");
+        }
+        return sb.ToString();
     }
 
     async Task<string> GetPromptSuggestion(IEnumerable<SelectableWidget> selectedWidgets)
     {
         using (var scope = ServiceProvider.CreateScope())
         {
-            var chatSession = scope.ServiceProvider.GetRequiredService<ChatSession>();  // Get the chat session service
-            var suggestionPrompt = $"Given the following intents: \n```\n{string.Join("\n```\n```\n", selectedWidgets.Select(x => $"Reference: {{{{{x.WidgetGeneratorModel.Title}}}}}\nIntent: {x.WidgetGeneratorModel.PromptIntent}"))}\n```\nLook at all of the above intents and create a new prompt for an LLM that will use ideas and branch off to explore a new idea related to the intents. Format the new prompt where you reference the other intents. For example, for the first intent reference {{{{{selectedWidgets.First().WidgetGeneratorModel.Title}}}}} a new prompt for the LLM could look like: \"Explain more about what makes {{{{{selectedWidgets.First().WidgetGeneratorModel.Title}}}}} interesting and unique\". Only return the new prompt and be sure to include references in curly brackets";
-            return await chatSession.GetResponse(suggestionPrompt);
+            var chatSession = scope.ServiceProvider.GetRequiredService<ChatSession>();
+            return await chatSession.GetResponse(GetSuggestionPrompt());
         }
     }
 
     async Task UpdatePromptIntent(WidgetGeneratorModel widgetGeneratorModel)
     {
         using (var scope = ServiceProvider.CreateScope())
-        {            
+        {
             var chatSession = scope.ServiceProvider.GetRequiredService<ChatSession>();  // Get the chat session service
-            widgetGeneratorModel.PromptIntent = await chatSession.GetResponse($"Can you give me a brief summary of what this is trying to accomplish and it's intent? ```{widgetGeneratorModel.Prompt}```");
+            widgetGeneratorModel.PromptIntent = await chatSession.GetResponse($"Give me 2-3 sentence brief summary of what this is trying to accomplish: ```{widgetGeneratorModel.Prompt}```");
         }
     }
 

@@ -1,0 +1,83 @@
+﻿@page "/"
+@using ChainGenerator.Components.Dialogs
+
+@inject IJSRuntime JSRuntime
+@inject ChainGeneratorPageModelDal ChainGeneratorPageModelDal
+@inject IDialogService DialogService
+
+<MudLayout>
+    <MudDrawer @bind-Open="open" Anchor="Anchor.Left" Elevation="0" Variant="@DrawerVariant.Responsive" >        
+        <MudList Clickable="true" @bind-SelectedItem="selectedPageItem" SelectedValue="@SelectedPageModel.Id">
+            <MudListItem Icon="@Icons.Material.Filled.Add" IconColor="Color.Primary" OnClick="CreateNewPage" Value="0" Text="New Page" />
+            <MudDivider />
+            @foreach (var pageModel in PageModels)
+            {
+            <MudListItem OnClick="() => SelectedPageModel = pageModel" Value="@pageModel.Id" Text="@pageModel.Title"/>
+            }
+        </MudList>
+    </MudDrawer> 
+    <MudDrawer @bind-Open="open2" Anchor="Anchor.Right" Elevation="0" Variant="@DrawerVariant.Responsive" >        
+        <MudList Clickable="true" @bind-SelectedItem="selectedWidgetItem" SelectedValue="selectedWidget?.Id">
+            @foreach (var widget in SelectedPageModel.WidgetGeneratorModels)
+            {
+                <MudListItem OnClick="() => ScrollToWidget(widget)" Value="@widget.Id" Text="@widget.Title" />
+            }
+        </MudList>
+    </MudDrawer>
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.ExtraExtraLarge">
+            <ChainGeneratorPage PageModel="SelectedPageModel" />
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private MudListItem selectedPageItem;
+    private MudListItem selectedWidgetItem;
+    private ChainGeneratorPageModel SelectedPageModel { get; set; } = new();
+    private WidgetGeneratorModel selectedWidget;
+    private List<ChainGeneratorPageModel> PageModels { get; set; } = new();
+    private bool open = true;
+    private bool open2 = true;
+    // Reference to the JavaScript module
+    private IJSObjectReference? module;
+
+    protected override async Task OnInitializedAsync()
+    {
+        PageModels = await ChainGeneratorPageModelDal.GetUserChainGeneratorPageModelsAsync();
+        SelectedPageModel = PageModels.OrderByDescending(p => p.LastUpdated).FirstOrDefault() ?? new();
+    }
+
+    // Method called after the component is rendered
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Import the JavaScript module
+            module = await JSRuntime.InvokeAsync<IJSObjectReference>("import", "./js/chainGenerator.js");
+        }
+    }
+
+    private async Task CreateNewPage()
+    {
+        var dialog = await DialogService.ShowAsync<NewPageDialog>("Create New Page");
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            var newPageModel = new ChainGeneratorPageModel
+            {
+                Title = result.Data.ToString()
+            };
+            newPageModel = await ChainGeneratorPageModelDal.CreateChainGeneratorPageModelAsync(newPageModel);
+            PageModels.Add(newPageModel);
+            SelectedPageModel = newPageModel;
+        }
+    }
+
+    private async Task ScrollToWidget(WidgetGeneratorModel widgetGeneratorModel)
+    {
+        selectedWidget = widgetGeneratorModel;
+        await module.InvokeVoidAsync("scrollToElement", $"widget-{widgetGeneratorModel.Id}");
+    }
+}

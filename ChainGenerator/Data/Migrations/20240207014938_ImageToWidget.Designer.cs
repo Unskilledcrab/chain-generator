@@ -4,6 +4,7 @@ using ChainGenerator.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,13 +12,15 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ChainGenerator.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20240207014938_ImageToWidget")]
+    partial class ImageToWidget
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.1")
+                .HasAnnotation("ProductVersion", "8.0.0-rc.2.23480.1")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -114,47 +117,7 @@ namespace ChainGenerator.Migrations
                     b.ToTable("ChainGeneratorPageModel");
                 });
 
-            modelBuilder.Entity("ChainGenerator.Models.WidgetGeneratorModel", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int?>("ChainGeneratorPageModelId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("GeneratedPrompt")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("IsTextGenerator")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Prompt")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("PromptIntent")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("SelectedGeneratedImageIndex")
-                        .HasColumnType("int");
-
-                    b.Property<int>("SelectedGeneratedTextIndex")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ChainGeneratorPageModelId");
-
-                    b.ToTable("WidgetGeneratorModel");
-                });
-
-            modelBuilder.Entity("ChainGenerator.Models.WidgetImageReferenceModel", b =>
+            modelBuilder.Entity("ChainGenerator.Models.ImageReferenceModel", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -175,7 +138,7 @@ namespace ChainGenerator.Migrations
                     b.ToTable("ImageReferenceModel");
                 });
 
-            modelBuilder.Entity("ChainGenerator.Models.WidgetTextReferenceModel", b =>
+            modelBuilder.Entity("ChainGenerator.Models.WidgetGeneratorModel", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -183,18 +146,36 @@ namespace ChainGenerator.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Text")
+                    b.Property<int?>("ChainGeneratorPageModelId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("GeneratedImageUrl")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("GeneratedOutput")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("GeneratedPrompt")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsTextGenerator")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Prompt")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PromptIntent")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Title")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int>("WidgetId")
-                        .HasColumnType("int");
-
                     b.HasKey("Id");
 
-                    b.HasIndex("WidgetId");
+                    b.HasIndex("ChainGeneratorPageModelId");
 
-                    b.ToTable("WidgetTextReferenceModel");
+                    b.ToTable("WidgetGeneratorModel");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
@@ -339,14 +320,7 @@ namespace ChainGenerator.Migrations
                     b.Navigation("Owner");
                 });
 
-            modelBuilder.Entity("ChainGenerator.Models.WidgetGeneratorModel", b =>
-                {
-                    b.HasOne("ChainGenerator.Models.ChainGeneratorPageModel", null)
-                        .WithMany("WidgetGeneratorModels")
-                        .HasForeignKey("ChainGeneratorPageModelId");
-                });
-
-            modelBuilder.Entity("ChainGenerator.Models.WidgetImageReferenceModel", b =>
+            modelBuilder.Entity("ChainGenerator.Models.ImageReferenceModel", b =>
                 {
                     b.HasOne("ChainGenerator.Models.WidgetGeneratorModel", "Widget")
                         .WithMany("GeneratedImageReferences")
@@ -357,15 +331,11 @@ namespace ChainGenerator.Migrations
                     b.Navigation("Widget");
                 });
 
-            modelBuilder.Entity("ChainGenerator.Models.WidgetTextReferenceModel", b =>
+            modelBuilder.Entity("ChainGenerator.Models.WidgetGeneratorModel", b =>
                 {
-                    b.HasOne("ChainGenerator.Models.WidgetGeneratorModel", "Widget")
-                        .WithMany("GeneratedTextReferences")
-                        .HasForeignKey("WidgetId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Widget");
+                    b.HasOne("ChainGenerator.Models.ChainGeneratorPageModel", null)
+                        .WithMany("WidgetGeneratorModels")
+                        .HasForeignKey("ChainGeneratorPageModelId");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -427,8 +397,6 @@ namespace ChainGenerator.Migrations
             modelBuilder.Entity("ChainGenerator.Models.WidgetGeneratorModel", b =>
                 {
                     b.Navigation("GeneratedImageReferences");
-
-                    b.Navigation("GeneratedTextReferences");
                 });
 #pragma warning restore 612, 618
         }

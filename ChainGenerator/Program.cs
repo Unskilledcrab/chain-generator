@@ -1,6 +1,7 @@
 using ChainGenerator.Components;
 using ChainGenerator.Components.Account;
 using ChainGenerator.Data;
+using ChainGenerator.Data.DataAccessLayer;
 using ChainGenerator.Services;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -18,6 +19,8 @@ builder.Services.AddMudServices();
 builder.Services.AddOpenAIService();
 builder.Services.AddTransient<ChatSession>();
 builder.Services.AddTransient<ImageGenerator>();
+builder.Services.AddScoped<UserService>();
+builder.Services.AddScoped<ChainGeneratorPageModelDal>();
 
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<IdentityUserAccessor>();
@@ -44,6 +47,12 @@ builder.Services.AddIdentityCore<ApplicationUser>(options => options.SignIn.Requ
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
 
 var app = builder.Build();
+
+using (var scope = app.Services.GetRequiredService<IServiceScopeFactory>().CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    dbContext.Database.Migrate();
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

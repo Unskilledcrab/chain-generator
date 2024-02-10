@@ -1,0 +1,46 @@
+﻿@using System.Text
+@inject IServiceProvider ServiceProvider
+
+<MudDialog>
+    <DialogContent>
+        <MudImage Fluid="true"
+                  ObjectFit="ObjectFit.Contain"
+                  Src="@ImageUrl" />
+    </DialogContent>
+    <DialogActions>
+        @if (hasMultipleImages)
+        {
+            <MudText Typo="Typo.body2">@($"{ImageIndex + 1} of {ImageUrls.Count()}")</MudText>
+            <MudButton OnClick="@(() => PreviousImage())">Previous</MudButton>
+            <MudButton OnClick="@(() => NextImage())">Next</MudButton>
+        }
+        <MudButton OnClick="@(() => MudDialog.Cancel())">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+
+    [Parameter] public IEnumerable<string> ImageUrls { get; set; }
+    private string ImageUrl { get; set; }
+    private int ImageIndex { get; set; }
+    private bool hasMultipleImages => ImageUrls?.Count() > 1;
+
+    private void NextImage()
+    {
+        ImageIndex = ImageIndex == ImageUrls.Count() - 1 ? 0 : ImageIndex + 1;
+        ImageUrl = ImageUrls.ElementAtOrDefault(ImageIndex) ?? string.Empty;
+    }
+
+    private void PreviousImage()
+    {
+        ImageIndex = ImageIndex == 0 ? ImageUrls.Count() - 1 : ImageIndex - 1;
+        ImageUrl = ImageUrls.ElementAtOrDefault(ImageIndex) ?? string.Empty;
+    }
+
+    protected override void OnParametersSet()
+    {
+        ImageUrl = ImageUrls?.FirstOrDefault() ?? string.Empty;
+        base.OnParametersSet();
+    }
+}

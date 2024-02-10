@@ -1,7 +1,7 @@
-﻿@page "/"  
-@using System.Text.Json  
+﻿@using System.Text.Json
 
 @inject IJSRuntime JSRuntime
+@inject ChainGeneratorPageModelDal ChainGeneratorPageModelDal
 
 <!-- Text field for entering the new generator title -->
 <MudTextField @bind-Value="newGeneratorTitle"
@@ -15,34 +15,24 @@
               OnAdornmentClick="Submit" />
 <br />
 
-<!-- File upload component for importing pageModel.WidgetGeneratorModels -->
-<MudFileUpload T="IBrowserFile" FilesChanged="Import">
-    <ButtonTemplate>
-        <MudButtonGroup Color="Color.Primary" Variant="Variant.Outlined">
-            <MudButton StartIcon="@Icons.Material.Filled.Save" aria-label="delete" OnClick="Download">Save Generators</MudButton>
-            <MudButton StartIcon="@Icons.Material.Filled.UploadFile" aria-label="upload file" for="@context.Id" HtmlTag="label">Import Generator</MudButton>
-        </MudButtonGroup>
-    </ButtonTemplate>
-</MudFileUpload>
-<br />
-
 <!-- Grid for displaying the pageModel.WidgetGeneratorModels -->
-<MudGrid Justify="Justify.SpaceEvenly">
-    @foreach (var generator in pageModel.WidgetGeneratorModels)
+<MudGrid Spacing="2" Justify="Justify.Center">
+    @foreach (var generator in PageModel.WidgetGeneratorModels)
     {
         <MudItem>
             <WidgetGenerator WidgetGeneratorModel="@generator"
-                             OnRefresh="OnGeneratorRefresh"
-                             OnTitleEdited="OnTitleEdited"
-                             OnDelete="() => OnDelete(generator)"
-                             Parent="@this" />
+                                OnRefresh="OnGeneratorRefresh"
+                                OnTitleEdited="OnTitleEdited"
+                                OnDelete="() => OnDelete(generator)"
+                                Parent="@this" />
         </MudItem>
     }
 </MudGrid>
 
 @code {
+    [Parameter]
+    public ChainGeneratorPageModel PageModel { get; set; }
     private List<WidgetGenerator> widgetGenerators = new();
-    public ChainGeneratorPageModel pageModel = new();
 
     // Reference to the JavaScript module
     private IJSObjectReference? module;
@@ -69,42 +59,6 @@
         }
     }
 
-    // Method for importing pageModel.WidgetGeneratorModels from a file
-    private async Task Import(IBrowserFile browserFile)
-    {
-        // Read the file and deserialize it into a list of pageModel.WidgetGeneratorModels
-        var content = await new StreamReader(browserFile.OpenReadStream()).ReadToEndAsync();
-
-        // Try to deserialize the content as a ChainGeneratorPageModel
-        try
-        {
-            var newPageModel = JsonSerializer.Deserialize<ChainGeneratorPageModel>(content);
-            if (newPageModel != null)
-            {
-                pageModel = newPageModel;
-                return;
-            }
-        }
-        catch (JsonException)
-        {
-            // If the deserialization fails, try to deserialize the content as a list of pageModel.WidgetGeneratorModels
-            var newGenerators = JsonSerializer.Deserialize<List<WidgetGeneratorModel>>(content);
-            if (newGenerators != null)
-            {
-                pageModel.WidgetGeneratorModels.Clear();
-                pageModel.WidgetGeneratorModels.AddRange(newGenerators);
-            }
-        }
-
-    }
-
-    // Method for downloading the pageModel.WidgetGeneratorModels as a JSON file
-    private async Task Download()
-    {
-        var json = JsonSerializer.Serialize(pageModel);
-        await module.InvokeVoidAsync("download", json, "generator.json", "application/json");
-    }
-
     // Method for submitting the form
     private async Task Submit()
     {
@@ -112,11 +66,22 @@
         newGeneratorTitle = GetUniqueTitle(newGeneratorTitle);
 
         // Add a new generator with the unique title
-        pageModel.WidgetGeneratorModels.Add(new WidgetGeneratorModel
+        PageModel.WidgetGeneratorModels.Add(new WidgetGeneratorModel
             {
                 Title = newGeneratorTitle,
             });
         newGeneratorTitle = originalPrompt;
+
+        if (PageModel.Id == 0)
+        {
+            // Save the pageModel to the database
+            PageModel = await ChainGeneratorPageModelDal.CreateChainGeneratorPageModelAsync(PageModel);
+        }
+        else
+        {
+            // Update the pageModel in the database
+            await ChainGeneratorPageModelDal.UpdateChainGeneratorPageModelAsync(PageModel);
+        }
     }
 
     // Method for getting a unique title
@@ -147,19 +112,20 @@
     // Method for deleting a generator
     private void OnDelete(WidgetGeneratorModel WidgetGeneratorModel)
     {
-        pageModel.WidgetGeneratorModels.Remove(WidgetGeneratorModel);
+        PageModel.WidgetGeneratorModels.Remove(WidgetGeneratorModel);
     }
 
     // Method for refreshing a generator
     private async Task OnGeneratorRefresh(WidgetGenerator refreshTargetWidgetGenerator)
     {
         await InternalOnGeneratorRefresh(refreshTargetWidgetGenerator);
+        await ChainGeneratorPageModelDal.UpdateChainGeneratorPageModelAsync(PageModel);
     }
 
     // Method for editing the title of a generator
     private void OnTitleEdited((string previousTitle, string newTitle) title)
     {
-        foreach (var generator in pageModel.WidgetGeneratorModels)
+        foreach (var generator in PageModel.WidgetGeneratorModels)
         {
             generator.Prompt = generator.Prompt?.Replace("{{" + title.previousTitle + "}}", "{{" + title.newTitle + "}}");
         }
@@ -183,7 +149,7 @@
         // Set the target widgets generated prompt from the references and generate
         foreach (var referencedWidgetTitle in refreshTargetWidgetGenerator.WidgetGeneratorModel.GetGeneratorTitleReferences())
         {
-            foreach (var generator in pageModel.WidgetGeneratorModels)
+            foreach (var generator in PageModel.WidgetGeneratorModels)
             {
                 // If the generator title matches the reference, replace this pageModel.WidgetGeneratorModels reference with the final output (usually the generated output of the referenced generator)
                 if (generator.Title == referencedWidgetTitle)

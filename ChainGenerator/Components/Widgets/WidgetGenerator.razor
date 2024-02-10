@@ -4,7 +4,7 @@
 @inject IDialogService DialogService
 
 <!-- The main card that contains the widget generator -->
-<MudCard Outlined="true">
+<MudCard id="@WidgetId" Outlined="true">
     <!-- The card header contains the title and action buttons -->
     <MudCardHeader>
         <CardHeaderContent>
@@ -59,11 +59,22 @@
                         AutoGrow />
          <!-- If the generator is a text generator, show a text field for the output. Otherwise, show an image. -->
          @if (WidgetGeneratorModel.IsTextGenerator)
-        {
-            <MudTextField T="string"
-                          Placeholder="@placeHolderText"
-                          @bind-Text="@WidgetGeneratorModel.GeneratedOutput"
-                            AutoGrow />
+         {
+            if (WidgetGeneratorModel.GeneratedOutput == null)
+            {
+                <MudTextField T="string" Disabled="true" Text="Click the generate button to create an text" />
+            }
+            else
+            {
+                <MudCarousel Style="height:600px; width:600px;" @bind-SelectedIndex="@WidgetGeneratorModel.SelectedGeneratedTextIndex" ItemsSource="WidgetGeneratorModel.GeneratedTextReferences" ShowArrows="@hasMultipleTexts" ShowBullets="@hasMultipleTexts" EnableSwipeGesture="@hasMultipleTexts" AutoCycle="false">
+                    <ItemTemplate>
+                        <MudTextField T="string"
+                                      Placeholder="@placeHolderText"
+                                      @bind-Text="@WidgetGeneratorModel.GeneratedOutput"
+                                        AutoGrow />                            
+                    </ItemTemplate>
+                </MudCarousel>
+            }
         }
         else
         {
@@ -71,9 +82,17 @@
             {
                 <MudTextField T="string" Disabled="true" Text="Click the generate button to create an image" />
             }
-            <MudImage Fluid="true"
-                      ObjectFit="ObjectFit.Contain"
-                      Src="@WidgetGeneratorModel.GeneratedImageUrl" />
+            else
+            {
+                <MudCarousel Style="height:600px; width:600px;" @bind-SelectedIndex="@WidgetGeneratorModel.SelectedGeneratedImageIndex" ItemsSource="WidgetGeneratorModel.GeneratedImageReferences" ShowArrows="@hasMultipleImages" ShowBullets="@hasMultipleImages" EnableSwipeGesture="@hasMultipleImages" AutoCycle="false">
+                    <ItemTemplate>
+                        <MudImage Fluid="true"
+                                  @onclick="() => ShowPictureDialog()"
+                                  ObjectFit="ObjectFit.Contain"
+                                  Src="@context.ImageUrl" />
+                    </ItemTemplate>
+                </MudCarousel>
+            }
         }
     </MudCardContent>
 </MudCard>
@@ -96,11 +115,15 @@
     [Parameter]
     public EventCallback OnDelete { get; set; }  // Event for deleting the generator
 
+    public string WidgetId => $"widget-{WidgetGeneratorModel.Id}";  // ID of the widget
+
     private string promptHelpText { get; set; }  // Help text for the prompt
     private string previousTitle { get; set; }  // Previous title before editing
     private bool refreshInProgress { get; set; } = false;  // Flag for whether a refresh is in progress
     private bool isEditingTitle { get; set; } = false;  // Flag for whether the title is being edited
     private MudTextField<string>? titleRef { get; set; }  // Reference to the title text field
+    private bool hasMultipleImages => WidgetGeneratorModel.GeneratedImageReferences.Count > 1;  // Flag for whether the generator has multiple images
+    private bool hasMultipleTexts => WidgetGeneratorModel.GeneratedTextReferences.Count > 1;  // Flag for whether the generator has multiple images
 
     // Methods for handling events and refreshing the generator
     private async Task OnRefreshAsync()
@@ -120,10 +143,20 @@
         }
     }
 
+    private void ShowPictureDialog()
+    {
+        var parameters = new DialogParameters<PictureDialog>();
+        parameters.Add(nameof(PictureDialog.ImageUrls), WidgetGeneratorModel.GeneratedImageReferences.Select(r => r.ImageUrl));
+
+        var options = new DialogOptions() { FullWidth = true, MaxWidth = MaxWidth.Medium, CloseButton = true };
+
+        DialogService.Show<PictureDialog>("Generated Images", parameters, options);
+    }
+
     private async Task SuggestPrompt()
     {
         var parameters = new DialogParameters<PromptSuggestionDialog>();
-        parameters.Add(nameof(PromptSuggestionDialog.ChainGeneratorPageModel), Parent.pageModel);
+        parameters.Add(nameof(PromptSuggestionDialog.ChainGeneratorPageModel), Parent.PageModel);
 
         var dialog = await DialogService.ShowAsync<PromptSuggestionDialog>("Suggest Prompt", parameters);
         var result = await dialog.Result;
@@ -193,7 +226,9 @@
         using (var scope = ServiceProvider.CreateScope())
         {
             var chatSession = scope.ServiceProvider.GetRequiredService<ChatSession>();  // Get the chat session service
-            WidgetGeneratorModel.PromptIntent = await chatSession.GetResponse($"Can you give me a brief summary of what this is trying to accomplish and it's intent? ```{WidgetGeneratorModel.Prompt}```");
+
+            var summaryTarget = WidgetGeneratorModel.GeneratedOutput ?? WidgetGeneratorModel.Prompt;
+            WidgetGeneratorModel.PromptIntent = await chatSession.GetResponse($"Give me 3-4 sentence brief summary of what this is trying to accomplish: ```{summaryTarget}```");
         }
     }
 
@@ -201,7 +236,7 @@
     {
         var chatSession = scope.ServiceProvider.GetRequiredService<ChatSession>();  // Get the chat session service
         var sb = new StringBuilder();
-        WidgetGeneratorModel.GeneratedOutput = string.Empty;  // Clear the generated output
+        WidgetGeneratorModel.AddTextReference(string.Empty);
 
         await foreach (var responseSegment in chatSession.GetResponseStream(WidgetGeneratorModel.GetFinalPrompt()))
         {
@@ -222,14 +257,15 @@
                 Prompt = WidgetGeneratorModel.GetFinalPrompt()  // Create an image with the final prompt
             });
 
-        WidgetGeneratorModel.GeneratedImageUrl = response.Results.First().Url;  // Update the generated image URL
+        var generatedImageUrl = response.Results.First().Url;  // Update the generated image URL
 
         using (var httpClient = new HttpClient())
         {
-            var imageBytes = await httpClient.GetByteArrayAsync(WidgetGeneratorModel.GeneratedImageUrl);  // Get the image bytes
+            var imageBytes = await httpClient.GetByteArrayAsync(generatedImageUrl);  // Get the image bytes
             var imageFileName = $"{Guid.NewGuid().ToString()}.png";  // Generate a file name for the image
             await SaveImage(imageBytes, imageFileName);  // Save the image
-            WidgetGeneratorModel.GeneratedImageUrl = $"/images/{imageFileName}";  // Update the generated image URL
+            WidgetGeneratorModel.GeneratedImageReferences.Add(new WidgetImageReferenceModel { ImageUrl = generatedImageUrl, Widget = WidgetGeneratorModel });  // Add the generated output as an image reference)
+            WidgetGeneratorModel.SelectedGeneratedImageIndex = WidgetGeneratorModel.GeneratedImageReferences.Count - 1;  // Select the last image reference
         }
     }
 
