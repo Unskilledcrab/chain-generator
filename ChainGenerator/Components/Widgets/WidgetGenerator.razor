@@ -263,19 +263,21 @@
         {
             var imageBytes = await httpClient.GetByteArrayAsync(generatedImageUrl);  // Get the image bytes
             var imageFileName = $"{Guid.NewGuid().ToString()}.png";  // Generate a file name for the image
-            await SaveImage(imageBytes, imageFileName);  // Save the image
-            WidgetGeneratorModel.GeneratedImageReferences.Add(new WidgetImageReferenceModel { ImageUrl = generatedImageUrl, Widget = WidgetGeneratorModel });  // Add the generated output as an image reference)
+            var imagePath = await SaveImage(imageBytes, imageFileName);  // Save the image
+            WidgetGeneratorModel.GeneratedImageReferences.Add(new WidgetImageReferenceModel { ImageUrl = imagePath, Widget = WidgetGeneratorModel });  // Add the generated output as an image reference)
             WidgetGeneratorModel.SelectedGeneratedImageIndex = WidgetGeneratorModel.GeneratedImageReferences.Count - 1;  // Select the last image reference
         }
     }
 
-    private async Task SaveImage(byte[] imageBytes, string fileName)
+    private async Task<string> SaveImage(byte[] imageBytes, string fileName)
     {
-        var imagePath = Path.Combine("wwwroot", "images", fileName);  // Get the image path
+        var imageRelativePath = Path.Combine("images", fileName);  // Get the image path
+        var imageSavePath = Path.Combine("wwwroot", imageRelativePath);  // Get the image path
 
-        using (var fileStream = new FileStream(imagePath, FileMode.Create))
+        using (var fileStream = new FileStream(imageSavePath, FileMode.Create))
         {
             await fileStream.WriteAsync(imageBytes);  // Write the image bytes to the file
         }
+        return imageRelativePath;  // Return the image path
     }
 }
