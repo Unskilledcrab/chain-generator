@@ -71,12 +71,38 @@ namespace ChainGenerator.Models
             return Prompt.Contains("{{") && Prompt.Contains("}}");
         }
 
+        public bool ContainsInputParameterReferences()
+        {
+            if (Prompt == null)
+            {
+                return false;
+            }
+
+            return Prompt.Contains("[[") && Prompt.Contains("]]");
+        }
+
+        public string[] GetInputParameterReferences()
+        {
+            if (Prompt == null)
+            {
+                return Array.Empty<string>();
+            }
+
+            var matches = Regex.Matches(Prompt, @"\[\[(.*?)\]\]");
+            var references = new List<string>();
+            foreach (Match match in matches)
+            {
+                references.Add(match.Groups[1].Value);
+            }
+            return references.ToArray();
+        }
+
         // Method to get the references to other generators in the prompt
         public string[] GetGeneratorTitleReferences()
         {
             if (Prompt == null)
             {
-                return new string[0];
+                return Array.Empty<string>();
             }
 
             var matches = Regex.Matches(Prompt, @"{{(.*?)}}");

@@ -22,6 +22,7 @@ namespace ChainGenerator.Data.DataAccessLayer
                     .ThenInclude(w => w.GeneratedImageReferences)
                 .Include(c => c.WidgetGeneratorModels)
                     .ThenInclude(w => w.GeneratedTextReferences)
+                .Include(c => c.InputParameters)
                 .FirstOrDefaultAsync(c => c.Id == id);
         }
 
@@ -43,6 +44,7 @@ namespace ChainGenerator.Data.DataAccessLayer
                     .ThenInclude(w => w.GeneratedImageReferences)
                 .Include(c => c.WidgetGeneratorModels)
                     .ThenInclude(w => w.GeneratedTextReferences)
+                .Include(c => c.InputParameters)
                 .Where(c => c.Owner == owner)
                 .ToListAsync();
         }
