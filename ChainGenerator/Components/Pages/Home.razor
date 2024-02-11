@@ -44,7 +44,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        PageModels = await ChainGeneratorPageModelDal.GetUserChainGeneratorPageModelsAsync();
+        PageModels = await ChainGeneratorPageModelDal.GetUserChainGeneratorPageModelsAsync() ?? new();
         SelectedPageModel = PageModels.OrderByDescending(p => p.LastUpdated).FirstOrDefault() ?? new();
     }
 

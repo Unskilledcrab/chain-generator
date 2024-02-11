@@ -17,7 +17,10 @@ namespace ChainGenerator.Services
 
         public async Task<ApplicationUser?> GetUserAsync()
         {
-            return await userManager.GetUserAsync(httpContextAccessor.HttpContext?.User);
+            if (httpContextAccessor?.HttpContext?.User == null)
+                return null;
+
+            return await userManager.GetUserAsync(httpContextAccessor?.HttpContext?.User);
         }
     }
 }

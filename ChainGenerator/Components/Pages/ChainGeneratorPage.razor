@@ -74,6 +74,10 @@
 
         if (PageModel.Id == 0)
         {
+            if (string.IsNullOrEmpty(PageModel.Title))
+            {
+                PageModel.Title = "Untitled";
+            }
             // Save the pageModel to the database
             PageModel = await ChainGeneratorPageModelDal.CreateChainGeneratorPageModelAsync(PageModel);
         }
