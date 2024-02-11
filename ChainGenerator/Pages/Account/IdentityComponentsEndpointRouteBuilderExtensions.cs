@@ -1,5 +1,5 @@
-using ChainGenerator.Components.Account.Pages;
-using ChainGenerator.Components.Account.Pages.Manage;
+using ChainGenerator.Pages.Account.Pages;
+using ChainGenerator.Pages.Account.Pages.Manage;
 using ChainGenerator.Data;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Components.Authorization;

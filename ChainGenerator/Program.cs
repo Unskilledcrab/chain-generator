@@ -1,5 +1,5 @@
 using ChainGenerator.Components;
-using ChainGenerator.Components.Account;
+using ChainGenerator.Pages.Account;
 using ChainGenerator.Data;
 using ChainGenerator.Data.DataAccessLayer;
 using ChainGenerator.Services;
@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
 using OpenAI.Extensions;
+using ChainGenerator;
 
 var builder = WebApplication.CreateBuilder(args);
 
