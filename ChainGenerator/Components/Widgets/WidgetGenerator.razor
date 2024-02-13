@@ -1,5 +1,8 @@
-﻿@using System.Text
+﻿@implements IDisposable
+
+@using System.Text
 @using ChainGenerator.Components.Dialogs
+
 @inject IServiceProvider ServiceProvider
 @inject IDialogService DialogService
 
@@ -66,11 +69,12 @@
             }
             else
             {
-                <MudCarousel Style="height:600px; width:600px;" @bind-SelectedIndex="@WidgetGeneratorModel.SelectedGeneratedTextIndex" ItemsSource="WidgetGeneratorModel.GeneratedTextReferences" ShowArrows="@hasMultipleTexts" ShowBullets="@hasMultipleTexts" EnableSwipeGesture="@hasMultipleTexts" AutoCycle="false">
+                <MudCarousel Style="@carouselStyle" @bind-SelectedIndex="@WidgetGeneratorModel.SelectedGeneratedTextIndex" ItemsSource="WidgetGeneratorModel.GeneratedTextReferences" ShowArrows="@hasMultipleTexts" ShowBullets="@hasMultipleTexts" EnableSwipeGesture="@hasMultipleTexts" AutoCycle="false">
                     <ItemTemplate>
                         <MudTextField T="string"
                                       Placeholder="@placeHolderText"
                                       @bind-Text="@WidgetGeneratorModel.GeneratedOutput"
+                                      MaxLines="27"
                                         AutoGrow />                            
                     </ItemTemplate>
                 </MudCarousel>
@@ -84,7 +88,7 @@
             }
             else
             {
-                <MudCarousel Style="height:600px; width:600px;" @bind-SelectedIndex="@WidgetGeneratorModel.SelectedGeneratedImageIndex" ItemsSource="WidgetGeneratorModel.GeneratedImageReferences" ShowArrows="@hasMultipleImages" ShowBullets="@hasMultipleImages" EnableSwipeGesture="@hasMultipleImages" AutoCycle="false">
+                <MudCarousel Style="@carouselStyle" @bind-SelectedIndex="@WidgetGeneratorModel.SelectedGeneratedImageIndex" ItemsSource="WidgetGeneratorModel.GeneratedImageReferences" ShowArrows="@hasMultipleImages" ShowBullets="@hasMultipleImages" EnableSwipeGesture="@hasMultipleImages" AutoCycle="false">
                     <ItemTemplate>
                         <MudImage Fluid="true"
                                   @onclick="() => ShowPictureDialog()"
@@ -117,6 +121,8 @@
 
     public string WidgetId => $"widget-{WidgetGeneratorModel.Id}";  // ID of the widget
 
+    private int carouselSize = 600;  // Size of the carousel
+    private string carouselStyle => $"height:{carouselSize}px; width:{carouselSize}px;";  // Style for the carousel
     private string promptHelpText { get; set; }  // Help text for the prompt
     private string previousTitle { get; set; }  // Previous title before editing
     private bool refreshInProgress { get; set; } = false;  // Flag for whether a refresh is in progress
@@ -182,6 +188,11 @@
     {
         base.OnInitialized();
         Parent?.AddWidgetGenerator(this);  // Add this widget generator to the parent page
+    }
+
+    public void Dispose()
+    {
+        Parent?.RemoveWidgetGenerator(this);  // Remove this widget generator from the parent page
     }
 
     public void OnPromptChanged(string newPrompt)

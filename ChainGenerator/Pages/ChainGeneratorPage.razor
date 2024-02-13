@@ -136,7 +136,7 @@
             }
             else
             {
-                html = html.Replace("{{" + generator.Title + "}}", $"<img src=\"{generator.GeneratedImageUrl}\" class=\"mud-image fluid object-contain object-center\"");
+                html = html.Replace("{{" + generator.Title + "}}", $"<img src=\"{generator.GeneratedImageUrl}\" class=\"mud-image fluid object-contain object-center\"/>");
             }
         }
         hmtlPreview = html;
@@ -194,14 +194,14 @@
     // Method for getting a unique title
     private string GetUniqueTitle(string title)
     {
-        if (widgetGenerators.Any(x => x.WidgetGeneratorModel.Title == title))
+        if (PageModel.WidgetGeneratorModels.Any(x => x.Title == title))
         {
             if (!title.EndsWith(" (1)"))
             {
                 title += " (1)";
             }
             var i = 2;
-            while (widgetGenerators.Any(x => x.WidgetGeneratorModel.Title == title))
+            while (PageModel.WidgetGeneratorModels.Any(x => x.Title == title))
             {
                 title = title.Replace($" ({i - 1})", $" ({i})");
                 i++;
@@ -210,9 +210,24 @@
         return title;
     }
 
+    public void RemoveWidgetGenerator(WidgetGenerator WidgetGenerator)
+    {
+        widgetGenerators.Remove(WidgetGenerator);
+    }
+
     // Method for adding a widget generator
     public void AddWidgetGenerator(WidgetGenerator WidgetGenerator)
     {
+        if (widgetGenerators.Count == PageModel.WidgetGeneratorModels.Count)
+        {
+            return;
+        }
+
+        if (widgetGenerators.Any(x => x == WidgetGenerator))
+        {
+            return;
+        }
+
         widgetGenerators.Add(WidgetGenerator);
     }
 
