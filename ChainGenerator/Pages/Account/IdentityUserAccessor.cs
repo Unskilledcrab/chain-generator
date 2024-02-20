@@ -1,7 +1,7 @@
 using ChainGenerator.Data;
 using Microsoft.AspNetCore.Identity;
 
-namespace ChainGenerator.Components.Account
+namespace ChainGenerator.Pages.Account
 {
     internal sealed class IdentityUserAccessor(UserManager<ApplicationUser> userManager, IdentityRedirectManager redirectManager)
     {

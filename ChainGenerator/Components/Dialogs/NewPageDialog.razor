@@ -1,0 +1,37 @@
+﻿@using System.Text
+@inject IServiceProvider ServiceProvider
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField Label="Suggestion" @bind-Value="@creationPrompt" HelperText="What would you like to create?" />
+    </DialogContent>
+    <DialogActions>        
+        <MudButton OnClick="@(() => MudDialog.Cancel())">Close</MudButton>
+        <MudButton Disabled="string.IsNullOrEmpty(creationPrompt)" OnClick="Submit">Submit</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+
+    private string creationPrompt { get; set; }
+
+    private async Task Submit()
+    {
+        var updatedPrompt = new StringBuilder();
+        updatedPrompt.AppendLine();
+        updatedPrompt.AppendLine("Create a very short two to three word title that accurately describes the following:");
+        updatedPrompt.AppendLine(creationPrompt);
+        var response = await Chat(updatedPrompt.ToString());
+        MudDialog.Close(DialogResult.Ok(response));
+    }
+
+    async Task<string> Chat(string prompt)
+    {
+        using (var scope = ServiceProvider.CreateScope())
+        {
+            var chatSession = scope.ServiceProvider.GetRequiredService<ChatSession>();
+            return await chatSession.GetResponse(prompt);
+        }
+    }
+}

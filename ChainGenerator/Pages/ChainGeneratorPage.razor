@@ -1,0 +1,307 @@
+﻿@using System.Text.Json
+
+@inject IJSRuntime JSRuntime
+@inject ChainGeneratorPageModelDal ChainGeneratorPageModelDal
+
+<MudTabs>
+    <MudTabPanel Text="Template Settings">
+        <MudPaper>
+            <MudTextField @bind-Value="PageModel.Title" Label="Title" />
+            <MudTextField @bind-Value="PageModel.Description" Label="Description" />
+        </MudPaper>
+
+        <MudPaper>
+            <MudButton OnClick="AddInputParameter">Add Input Parameter</MudButton>
+        </MudPaper>
+
+        <MudPaper>
+            @foreach (var inputParameter in PageModel.InputParameters)
+            {
+                <MudTextField @bind-Value="inputParameter.Name" Label="Name" />
+                <MudTextField @bind-Value="inputParameter.Description" Label="Description" />
+                <MudTextField @bind-Value="inputParameter.DefaultValue" Label="Default Value" />
+            }
+        </MudPaper>
+    </MudTabPanel>
+
+    <MudTabPanel Text="Template Generators">
+        <!-- Text field for entering the new generator title -->
+        <MudTextField @bind-Value="newGeneratorTitle"
+                      @onkeydown="@OnKeyDown"
+                      Immediate="true"
+                      Label="New Generator Title"
+                      HelperText=""
+                      Variant="Variant.Outlined"
+                      AdornmentIcon="@Icons.Material.Filled.Add"
+                      Adornment="Adornment.End"
+                      OnAdornmentClick="Submit" />
+        <br />
+
+        <!-- Grid for displaying the pageModel.WidgetGeneratorModels -->
+        <MudGrid Spacing="2" Justify="Justify.Center">
+            @foreach (var generator in PageModel.WidgetGeneratorModels)
+            {
+                <MudItem>
+                    <WidgetGenerator WidgetGeneratorModel="@generator"
+                                     OnRefresh="OnGeneratorRefresh"
+                                     OnTitleEdited="OnTitleEdited"
+                                     OnDelete="() => OnDelete(generator)"
+                                     Parent="@this" />
+                </MudItem>
+            }
+        </MudGrid>
+    </MudTabPanel>
+
+    <MudTabPanel Text="Template Preview">
+        <MudMenu @ref="templateMenu" PositionAtCursor="true" ActivationEvent="MouseEvent.RightClick">
+            <ActivatorContent>
+                <MudTextField Value="PageModel.HtmlOutputTemplate" 
+                              ValueChanged="(string v) => HtmlOutputTemplateChanged(v)" 
+                              Immediate="true" 
+                              Label="HTML Output Template" 
+                              HelperText="Right click to quickly reference widgets"
+                              AutoGrow="true" />
+            </ActivatorContent>
+            <ChildContent>
+                <MudMenu ActivationEvent="MouseEvent.MouseOver" AnchorOrigin="Origin.TopRight" TransformOrigin="Origin.TopLeft">
+                    <ActivatorContent>
+                        <MudMenuItem>Insert Widget</MudMenuItem>
+                    </ActivatorContent>
+                    <ChildContent>
+                        @foreach (var generator in PageModel.WidgetGeneratorModels)
+                        {
+                            <MudMenuItem OnClick="() => UpdateHtmlOutputWithWidgetGenerator(generator)">@generator.Title</MudMenuItem>                            
+                        }
+                    </ChildContent>
+                </MudMenu>
+            </ChildContent>
+        </MudMenu>
+
+        <MudPaper>
+            @((MarkupString)hmtlPreview)
+        </MudPaper>
+    </MudTabPanel>
+</MudTabs>
+
+
+@code {
+    private MudMenu templateMenu;
+
+    [Parameter]
+    public ChainGeneratorPageModel PageModel { get; set; }
+    private List<WidgetGenerator> widgetGenerators = new();
+
+    // Reference to the JavaScript module
+    private IJSObjectReference? module;
+    // Title for the new generator
+    private string newGeneratorTitle { get; set; } = "";
+    private string hmtlPreview { get; set; } = "";
+    private int cursorPosition { get; set; } = 0;
+
+    // Method for adding a new input parameter
+    private void AddInputParameter()
+    {
+        PageModel.InputParameters.Add(new());
+    }
+
+    private void UpdateHtmlOutputWithWidgetGenerator(WidgetGeneratorModel generator)
+    {
+        PageModel.HtmlOutputTemplate = PageModel.HtmlOutputTemplate.Insert(cursorPosition, "{{" + generator.Title + "}}");
+    }
+
+    private void HtmlOutputTemplateChanged(string newValue)
+    {
+        if (PageModel.HtmlOutputTemplate == newValue)
+        {
+            return;
+        }
+
+        var characterOffset = newValue.Length - PageModel.HtmlOutputTemplate.Length;
+        // Get the first index that was changes on the output template
+        cursorPosition = PageModel.HtmlOutputTemplate.Zip(newValue).TakeWhile(pair => pair.First == pair.Second).Count();
+        cursorPosition += characterOffset;
+
+        PageModel.HtmlOutputTemplate = newValue;
+        Preview();
+    }
+
+    private void Preview()
+    {
+        var html = PageModel.HtmlOutputTemplate;
+        foreach (var generator in PageModel.WidgetGeneratorModels)
+        {
+            if (generator.IsTextGenerator)
+            {
+                html = html.Replace("{{" + generator.Title + "}}", generator.GeneratedOutput);
+            }
+            else
+            {
+                html = html.Replace("{{" + generator.Title + "}}", $"<img src=\"{generator.GeneratedImageUrl}\" class=\"mud-image fluid object-contain object-center\"/>");
+            }
+        }
+        hmtlPreview = html;
+    }
+
+    // Method called after the component is rendered
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Import the JavaScript module
+            module = await JSRuntime.InvokeAsync<IJSObjectReference>("import", "./js/chainGenerator.js");
+        }
+    }
+
+    // Method called when a key is pressed in the text field
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Code == "Enter" || e.Code == "NumpadEnter")
+        {
+            // Submit the form if the Enter key is pressed
+            await Submit();
+        }
+    }
+
+    // Method for submitting the form
+    private async Task Submit()
+    {
+        var originalPrompt = newGeneratorTitle;
+        newGeneratorTitle = GetUniqueTitle(newGeneratorTitle);
+
+        // Add a new generator with the unique title
+        PageModel.WidgetGeneratorModels.Add(new WidgetGeneratorModel
+            {
+                Title = newGeneratorTitle,
+            });
+        newGeneratorTitle = originalPrompt;
+
+        if (PageModel.Id == 0)
+        {
+            if (string.IsNullOrEmpty(PageModel.Title))
+            {
+                PageModel.Title = "Untitled";
+            }
+            // Save the pageModel to the database
+            PageModel = await ChainGeneratorPageModelDal.CreateChainGeneratorPageModelAsync(PageModel);
+        }
+        else
+        {
+            // Update the pageModel in the database
+            await ChainGeneratorPageModelDal.UpdateChainGeneratorPageModelAsync(PageModel);
+        }
+    }
+
+    // Method for getting a unique title
+    private string GetUniqueTitle(string title)
+    {
+        if (PageModel.WidgetGeneratorModels.Any(x => x.Title == title))
+        {
+            if (!title.EndsWith(" (1)"))
+            {
+                title += " (1)";
+            }
+            var i = 2;
+            while (PageModel.WidgetGeneratorModels.Any(x => x.Title == title))
+            {
+                title = title.Replace($" ({i - 1})", $" ({i})");
+                i++;
+            }
+        }
+        return title;
+    }
+
+    public void RemoveWidgetGenerator(WidgetGenerator WidgetGenerator)
+    {
+        widgetGenerators.Remove(WidgetGenerator);
+    }
+
+    // Method for adding a widget generator
+    public void AddWidgetGenerator(WidgetGenerator WidgetGenerator)
+    {
+        if (widgetGenerators.Count == PageModel.WidgetGeneratorModels.Count)
+        {
+            return;
+        }
+
+        if (widgetGenerators.Any(x => x == WidgetGenerator))
+        {
+            return;
+        }
+
+        widgetGenerators.Add(WidgetGenerator);
+    }
+
+    // Method for deleting a generator
+    private void OnDelete(WidgetGeneratorModel WidgetGeneratorModel)
+    {
+        PageModel.WidgetGeneratorModels.Remove(WidgetGeneratorModel);
+    }
+
+    // Method for editing the title of a generator
+    private void OnTitleEdited((string previousTitle, string newTitle) title)
+    {
+        foreach (var generator in PageModel.WidgetGeneratorModels)
+        {
+            generator.Prompt = generator.Prompt?.Replace("{{" + title.previousTitle + "}}", "{{" + title.newTitle + "}}");
+        }
+    }
+
+    // Method for refreshing a generator
+    private async Task OnGeneratorRefresh(WidgetGenerator refreshTargetWidgetGenerator)
+    {
+        await InternalOnGeneratorRefresh(refreshTargetWidgetGenerator);
+        await ChainGeneratorPageModelDal.UpdateChainGeneratorPageModelAsync(PageModel);
+    }
+
+    private void UpdateWidgetGeneratedPromptWithDefaultInputParameters(WidgetGeneratorModel widgetGeneratorModel)
+    {
+        foreach (var inputParameter in PageModel.InputParameters)
+        {
+            widgetGeneratorModel.GeneratedPrompt = widgetGeneratorModel.GeneratedPrompt?.Replace("[[" + inputParameter.Name + "]]", inputParameter.DefaultValue);
+        }
+    }
+
+
+    // Internal method for refreshing a generator
+    private async Task InternalOnGeneratorRefresh(WidgetGenerator refreshTargetWidgetGenerator, List<WidgetGenerator>? alreadyRefershedWidgets = null)
+    {
+        // Create a cache list of already refreshed widgets to prevent infinite loops
+        alreadyRefershedWidgets ??= new List<WidgetGenerator>();
+        if (alreadyRefershedWidgets.Contains(refreshTargetWidgetGenerator))
+        {
+            return;
+        }
+        // Add the current widget to the cache list to prevent infinite loops
+        alreadyRefershedWidgets.Add(refreshTargetWidgetGenerator);
+
+        // Reset the generated prompt in case any references were updated
+        refreshTargetWidgetGenerator.WidgetGeneratorModel.GeneratedPrompt = refreshTargetWidgetGenerator.WidgetGeneratorModel.Prompt;
+        UpdateWidgetGeneratedPromptWithDefaultInputParameters(refreshTargetWidgetGenerator.WidgetGeneratorModel);
+
+        // Set the target widgets generated prompt from the references and generate
+        foreach (var referencedWidgetTitle in refreshTargetWidgetGenerator.WidgetGeneratorModel.GetGeneratorTitleReferences())
+        {
+            foreach (var generator in PageModel.WidgetGeneratorModels)
+            {
+                // If the generator title matches the reference, replace this pageModel.WidgetGeneratorModels reference with the final output (usually the generated output of the referenced generator)
+                if (generator.Title == referencedWidgetTitle)
+                {
+                    refreshTargetWidgetGenerator.WidgetGeneratorModel.GeneratedPrompt = refreshTargetWidgetGenerator.WidgetGeneratorModel.GeneratedPrompt?.Replace("{{" + referencedWidgetTitle + "}}", generator.GeneratedOutput);
+                }
+            }
+        }
+        // Now that the prompt is updated, generate the final output
+        await refreshTargetWidgetGenerator.Refresh();
+
+        // See if any other widget references this one because it should now be re-generated if it does
+        var referenceTargetTasks = new List<Task>();
+        foreach (var WidgetGenerator in widgetGenerators)
+        {
+            if (WidgetGenerator.WidgetGeneratorModel.GetGeneratorTitleReferences().Contains(refreshTargetWidgetGenerator.WidgetGeneratorModel.Title))
+            {
+                referenceTargetTasks.Add(InternalOnGeneratorRefresh(WidgetGenerator, alreadyRefershedWidgets));
+            }
+        }
+        await Task.WhenAll(referenceTargetTasks);
+    }
+}
